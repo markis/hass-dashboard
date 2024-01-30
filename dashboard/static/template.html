@@ -1,0 +1,63 @@
+<section class="weather">
+  <header class="today-forecast">
+    <h1><i class="fa-solid {{ weather.weather_class }}"></i> {{ weather.condition.capitalize() }}</h1>
+    <span class="temperatures">
+      <h2>{{ weather.temperature }}&deg;</h2>
+      <h3>{{ weather.high_temp }}&deg; / {{ weather.low_temp }}&deg;</h3>
+    </span>
+  </header>
+  <ul class="weekly-forecast">
+    {% for forecast in weather.forecasts %}
+    <li class="day">
+      <span>{{ forecast.date.strftime('%a') }}</span>
+      <h2><i class="fa-solid {{ forecast.weather_class }}"></i></h2>
+      <ul class="temperatures">
+        <li class="hi">{{ forecast.high_temp }}&deg;</li>
+        <li class="lo">{{ forecast.low_temp }}&deg;</li>
+      </ul>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="calendar">
+  <ul class="calendar_days">
+    {% for date in dates_with_events[0:7] %}
+    <li>{{ date.day.strftime('%a') }}</li>
+    {% endfor %}
+  </ul>
+  <ul class="calendar_dates">
+    {% for date in dates_with_events %}
+      {% if date.events > 0 %}
+        <li class="highlight {% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}">
+          {{ date.day.strftime('%d') }} <span>{{ date.events }}</span>
+        </li>
+      {% else %}
+        <li class="{% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}">
+          {{ date.day.strftime('%d') }}
+        </li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="events">
+  <ul class="events_list">
+    {% for date in events %}
+      {% if events[date] %}
+        <li class="events_list_group">
+          <span class="day">{{ date.strftime('%A') }}</span>
+          <span class="date">{{ date.strftime('%B %d') }}</span>
+          <ul>
+            {% for event in events[date] %}
+            <li>
+              <span class="time">{{ event.start.strftime('%I:%M %p') }} - {{ event.end.strftime('%I:%M %p') }}</span>
+              <span class="name">{{ event.name }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</section>

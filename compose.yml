@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  dashboard:
+    image: markis/dashboard:latest
+    container_name: dashboard
+    env_file: .env
+    build:
+      context: .
+      dockerfile: Containerfile
+    volumes:
+      - ./:/src
