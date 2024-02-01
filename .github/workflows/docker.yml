@@ -37,6 +37,7 @@ jobs:
           context: .
           file: Containerfile
           platforms: ${{ env.PLATFORMS }}
+          pull: true
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest

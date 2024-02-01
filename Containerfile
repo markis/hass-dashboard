@@ -12,7 +12,7 @@ COPY pyproject.toml /src/
 COPY dashboard/ /src/dashboard/
 RUN --mount=type=cache,target=/var/cache/pip/ \
   --mount=type=bind,src=.git,dst=/src/.git \
-  pip install --no-cache-dir build~="$BUILD_VERSION"; \
+  pip install build~="$BUILD_VERSION"; \
   python -m build --wheel
 
 
