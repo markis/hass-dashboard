@@ -12,5 +12,5 @@ def run() -> None:
     asyncio.run(generate_image_every_minute())
 
 
-if __name__ == "__main__":
+if __name__ in ("dashboard", "__main__"):
     run()

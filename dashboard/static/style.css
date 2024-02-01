@@ -13,8 +13,8 @@ html {
 }
 
 body {
-  background: #555555;
-  color: #333333;
+  background: #999999;
+  color: #000000;
   font-size: 2rem;
   overflow: none;
   height: 100vw;
@@ -31,7 +31,7 @@ section {
   margin: 20px auto;
   background-color: #ffffff;
   border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
