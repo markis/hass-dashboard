@@ -47,6 +47,7 @@ WEATHER_ICON_NAMES: Final = {
 @dataclass(frozen=True, order=True)
 class Forecast:
     date: datetime
+
     high_temp: int
     low_temp: int
     condition: str
@@ -69,23 +70,31 @@ class Forecast:
 
 @dataclass(frozen=True)
 class Weather:
-    condition: str
-    weather_class: str
     temperature: int
+    forecasts: list[Forecast]
+
     high_temp: int
     low_temp: int
-    forecasts: list[Forecast]
+    condition: str
+    weather_class: str
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Weather":
         condition = d["state"]
+        weather_class = _weather_to_icon(condition)
         temperature = d["attributes"]["temperature"]
         forecasts = sorted(Forecast.from_dict(forecast) for forecast in d["attributes"]["forecast"])
         todays_forecast = forecasts.pop(0)
-        weather_class = todays_forecast.weather_class
         high_temp = todays_forecast.high_temp
         low_temp = todays_forecast.low_temp
-        return cls(condition, weather_class, temperature, high_temp, low_temp, forecasts)
+        return cls(
+            condition=condition,
+            weather_class=weather_class,
+            temperature=temperature,
+            high_temp=high_temp,
+            low_temp=low_temp,
+            forecasts=forecasts,
+        )
 
 
 async def get_weather(session: ClientSession, api_url: str, weather_entity_id: str) -> Weather:

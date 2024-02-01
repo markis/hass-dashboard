@@ -17,13 +17,18 @@ RUN --mount=type=cache,target=/var/cache/pip/ \
 
 
 FROM python:3.11-slim as runtime
-CMD ["generate_dashboard"]
-WORKDIR "/src"
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
   PIP_DISABLE_ROOT_WARNING=1 \
   PIP_ROOT_USER_ACTION=ignore \
   PIP_CACHE_DIR="/var/cache/pip/" \
-  HATCH_BUILD_HOOK_ENABLE_MYPYC=1
+  HATCH_BUILD_HOOK_ENABLE_MYPYC=1 \
+  TINI_VERSION="v0.19.0"
+
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-arm64 /tini
+RUN chmod +x /tini
+ENTRYPOINT ["/tini", "--"]
+CMD ["generate_dashboard"]
+WORKDIR "/src"
 
 RUN groupadd --system --gid 888 bot && \
   useradd --system --uid 888 --no-user-group --gid 888 \
