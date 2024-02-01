@@ -33,7 +33,7 @@ section {
   margin: 20px auto;
   background-color: #ffffff;
   border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.75);
   overflow: hidden;
   white-space: 'nowrap';
 }

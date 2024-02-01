@@ -129,7 +129,7 @@ def _weather_to_icon(weather_condition: str) -> str:
             if weather_condition in WEATHER_ICON_NAMES:
                 result = weather_condition
             else:
-                min_distance = float("inf")
+                min_distance = -1
                 for candidate in WEATHER_ICON_NAMES:
                     distance = Levenshtein.distance(weather_condition, candidate)
                     if distance < min_distance:

@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   dashboard:
-    image: markis/dashboard:latest
+    image: markis/hass-dashboard:latest
     container_name: dashboard
     env_file: .env
     build:
