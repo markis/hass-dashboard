@@ -1,6 +1,6 @@
 <section class="weather">
   <header class="today-forecast">
-    <h1><i class="fa-solid {{ weather.weather_class }}"></i> {{ weather.condition.capitalize() }}</h1>
+    <h1><i class="{{ weather.weather_class }}"></i> {{ weather.condition.capitalize() }}</h1>
     <span class="temperatures">
       <h2>{{ weather.temperature }}&deg;</h2>
       <h3>{{ weather.high_temp }}&deg; / {{ weather.low_temp }}&deg;</h3>

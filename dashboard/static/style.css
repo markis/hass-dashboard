@@ -1,4 +1,5 @@
-@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css");
+/* @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"); */
+@import url("https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css");
 
 * {
   margin: 0;
@@ -13,9 +14,10 @@ html {
 }
 
 body {
-  background: #999999;
+  background: #FFFFFF;
   color: #000000;
   font-size: 2rem;
+  font-weight: 700;
   overflow: none;
   height: 100vw;
   width: 100vw;
@@ -33,6 +35,7 @@ section {
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  white-space: 'nowrap';
 }
 
 h1 {
@@ -138,7 +141,7 @@ h3 {
 }
 .events_list_group .day,
 .events_list_group .date {
-  font-weight: bold;
+  font-weight: 700;
   text-transform: uppercase;
 }
 .events_list_group .date {

@@ -1,9 +1,47 @@
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 
+import Levenshtein
 from aiohttp.client import ClientSession
+
+WEATHER_ICON_NAMES: Final = {
+    "day-sunny",
+    "cloud",
+    "cloudy",
+    "cloudy-gusts",
+    "cloudy-windy",
+    "fog",
+    "hail",
+    "rain",
+    "rain-mix",
+    "rain-wind",
+    "showers",
+    "sleet",
+    "snow",
+    "sprinkle",
+    "storm-showers",
+    "thunderstorm",
+    "snow-wind",
+    "smog",
+    "smoke",
+    "lightning",
+    "raindrops",
+    "dust",
+    "snowflake-cold",
+    "windy",
+    "strong-wind",
+    "sandstorm",
+    "earthquake",
+    "fire",
+    "flood",
+    "meteor",
+    "tsunami",
+    "volcano",
+    "hurricane",
+    "tornado",
+}
 
 
 @dataclass(frozen=True, order=True)
@@ -22,7 +60,7 @@ class Forecast:
     def from_dict(cls, d: dict[str, Any]) -> "Forecast":
         return cls(
             condition=d["condition"],
-            weather_class=_weather_to_font_awesome(d["condition"]),
+            weather_class=_weather_to_icon(d["condition"]),
             date=cls.get_datetime(d["datetime"]),
             high_temp=d["temperature"],
             low_temp=d["templow"],
@@ -58,19 +96,44 @@ async def get_weather(session: ClientSession, api_url: str, weather_entity_id: s
     return Weather.from_dict(result)
 
 
-def _weather_to_font_awesome(weather_condition: str) -> str:
-    result = "fa-circle-question"
+def _weather_to_icon(weather_condition: str) -> str:
+    result = "na"
     match weather_condition:
-        case "clear" | "sun" | "sunny":
-            result = "fa-sun"
+        case "clear-night":
+            result = "stars"
         case "cloudy":
-            result = "fa-cloud"
+            result = "cloudy"
+        case "exceptional":
+            result = "fire"
+        case "fog":
+            result = "day-fog"
+        case "hail":
+            result = "hail"
+        case "lightning-rainy" | "lightning":
+            result = "storm-showers"
         case "partlycloudy":
-            result = "fa-cloud-sun"
-        case "rain" | "rainy":
-            result = "fa-cloud-rain"
-        case "showers":
-            result = "fa-cloud-rain"
-        case "thunder" | "thunderstorm":
-            result = "fa-cloud-bolt"
-    return result
+            result = "day-cloudy"
+        case "pouring":
+            result = "rain"
+        case "rainy":
+            result = "showers"
+        case "snowy-rainy":
+            result = "rain-mix"
+        case "snowy":
+            result = "snowflake-cold"
+        case "sunny":
+            result = "day-sunny"
+        case "windy-variant" | "windy":
+            result = "strong-wind"
+        case _:
+            if weather_condition in WEATHER_ICON_NAMES:
+                result = weather_condition
+            else:
+                min_distance = float("inf")
+                for candidate in WEATHER_ICON_NAMES:
+                    distance = Levenshtein.distance(weather_condition, candidate)
+                    if distance < min_distance:
+                        min_distance = distance
+                        result = candidate
+
+    return f"wi wi-{result}"

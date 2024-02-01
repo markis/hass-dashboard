@@ -150,6 +150,8 @@ async def generate_image() -> None:
     )
     css_str = get_file_contents(dashboard_css)
 
+    print(rendered_html)
+
     hti = Html2Image(
         size=(RENDER_WIDTH, RENDER_HEIGHT),
         custom_flags=[
