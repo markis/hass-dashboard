@@ -59,9 +59,11 @@ class Forecast:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Forecast":
+        condition = d["condition"]
+        weather_class, condition = _weather_to_icon_name(condition)
         return cls(
-            condition=d["condition"],
-            weather_class=_weather_to_icon(d["condition"]),
+            condition=condition,
+            weather_class=weather_class,
             date=cls.get_datetime(d["datetime"]),
             high_temp=d["temperature"],
             low_temp=d["templow"],
@@ -81,7 +83,7 @@ class Weather:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Weather":
         condition = d["state"]
-        weather_class = _weather_to_icon(condition)
+        weather_class, condition = _weather_to_icon_name(condition)
         temperature = d["attributes"]["temperature"]
         forecasts = sorted(Forecast.from_dict(forecast) for forecast in d["attributes"]["forecast"])
         todays_forecast = forecasts.pop(0)
@@ -105,44 +107,58 @@ async def get_weather(session: ClientSession, api_url: str, weather_entity_id: s
     return Weather.from_dict(result)
 
 
-def _weather_to_icon(weather_condition: str) -> str:
-    result = "na"
+def _weather_to_icon_name(weather_condition: str) -> tuple[str, str]:
+    css_class = "na"
+    name = weather_condition
     match weather_condition:
         case "clear-night":
-            result = "stars"
+            css_class = "stars"
+            name = "Clear"
         case "cloudy":
-            result = "cloudy"
+            css_class = "cloudy"
+            name = "Cloudy"
         case "exceptional":
-            result = "fire"
+            css_class = "fire"
+            name = "Exceptional"
         case "fog":
-            result = "day-fog"
+            css_class = "day-fog"
+            name = "Fog"
         case "hail":
-            result = "hail"
+            css_class = "hail"
+            name = "Hail"
         case "lightning-rainy" | "lightning":
-            result = "storm-showers"
+            css_class = "storm-showers"
+            name = "Thunderstorm"
         case "partlycloudy":
-            result = "day-cloudy"
+            css_class = "day-cloudy"
+            name = "Partly Cloudy"
         case "pouring":
-            result = "rain"
+            css_class = "rain"
+            name = "Heavy Rain"
         case "rainy":
-            result = "showers"
+            css_class = "showers"
+            name = "Rainy"
         case "snowy-rainy":
-            result = "rain-mix"
+            css_class = "rain-mix"
+            name = "Snow-Rain mix"
         case "snowy":
-            result = "snowflake-cold"
+            css_class = "snowflake-cold"
+            name = "Snowy"
         case "sunny":
-            result = "day-sunny"
+            css_class = "day-sunny"
+            name = "Sunny"
         case "windy-variant" | "windy":
-            result = "strong-wind"
+            css_class = "strong-wind"
+            name = "Windy"
         case _:
             if weather_condition in WEATHER_ICON_NAMES:
-                result = weather_condition
+                css_class = weather_condition
             else:
                 min_distance = -1
                 for candidate in WEATHER_ICON_NAMES:
                     distance = Levenshtein.distance(weather_condition, candidate)
                     if distance < min_distance:
                         min_distance = distance
-                        result = candidate
+                        css_class = candidate
 
-    return f"wi wi-{result}"
+    return f"wi wi-{css_class}", name
