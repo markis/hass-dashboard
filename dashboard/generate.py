@@ -24,8 +24,6 @@ RENDER_WIDTH: Final = int(os.getenv("RENDER_WIDTH", "820"))
 RENDER_HEIGHT: Final = int(os.getenv("RENDER_HEIGHT", "1200"))
 RENDER_ROTATE: Final = int(os.getenv("RENDER_ROTATE", "270"))
 
-TODAY: Final = datetime.now(tz=TZ).date()
-
 
 @dataclass(order=True)
 class DateCount:
@@ -136,13 +134,14 @@ async def generate_image() -> None:
     dashboard_template = Path(dashboard.__file__).parent / "static" / "template.html"
     dashboard_css = Path(dashboard.__file__).parent / "static" / "style.css"
 
-    current_date = datetime.now(tz=TZ)
-    dates, end = get_calendar_dates(current_date)
+    current_datetime = datetime.now(tz=TZ)
+    dates, end = get_calendar_dates(current_datetime)
 
+    current_date = current_datetime.date()
     async with aiohttp.ClientSession(auth=BearerAuth(TOKEN)) as session:
-        weather, events = await fetch_data(session, API_URL, CALENDAR_ENTITY_IDS, TODAY, end)
+        weather, events = await fetch_data(session, API_URL, CALENDAR_ENTITY_IDS, current_date, end)
 
-    dates_with_events = generate_dates_with_events(dates, events, TODAY)
+    dates_with_events = generate_dates_with_events(dates, events, current_date)
 
     template = get_template(dashboard_template)
     rendered_html = template.render(
