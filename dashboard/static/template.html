@@ -30,7 +30,10 @@
     {% for date in dates_with_events %}
       {% if date.events > 0 %}
         <li class="highlight {% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}">
-          {{ date.day.strftime('%d') }} <span>{{ date.events }}</span>
+          {{ date.day.strftime('%d') }} 
+          {% if date.events > 1 %}
+            <span>{{ date.events }}</span>
+          {% endif %}
         </li>
       {% else %}
         <li class="{% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}">
