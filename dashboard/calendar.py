@@ -44,8 +44,8 @@ async def get_calendars(
     start: date,
     end: date,
 ) -> dict[date, list[Event]]:
-    start_str = start.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    end_str = end.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    start_str = datetime(start.year, start.month, start.day, tzinfo=TZ).isoformat()
+    end_str = datetime(end.year, end.month, end.day, tzinfo=TZ).isoformat()
 
     async def get_calendar_data(calendar: str) -> Any:
         url = f"{api_url}calendars/calendar.{calendar}?start={start_str}&end={end_str}"
