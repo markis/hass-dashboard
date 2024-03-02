@@ -152,11 +152,20 @@ async def generate_image() -> None:
     hti = Html2Image(
         size=(RENDER_WIDTH, RENDER_HEIGHT),
         custom_flags=[
-            "--hide-scrollbars",
-            "--disable-dev-shm-usage",
-            "--no-sandbox",
             "--lang=en",
+            "--headless",
+            "--hide-scrollbars",
+            "--no-sandbox",
+            "--no-first-run",
+            "--disable-features=dbus",
+            "--disable-sync",
+            "--disable-gpu",
+            "--disable-software-rasterizer",
+            "--disable-dev-shm-usage",
             "--virtual-time-budget=10000",
+            "--autoplay-policy=no-user-gesture-required",
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
         ],
     )
     hti.screenshot(html_str=rendered_html, css_str=css_str, save_as=OUTPUT_PATH)
