@@ -172,8 +172,9 @@ async def generate_image() -> None:
     temp_output = output_path.with_suffix(f".tmp{output_path.suffix}")
     hti.screenshot(html_str=rendered_html, css_str=css_str, save_as=str(temp_output))
 
-    if RENDER_ROTATE != 0:
-        with Image.open(temp_output) as im:
-            im.rotate(RENDER_ROTATE, expand=True).save(temp_output)
+    with Image.open(temp_output) as im:
+        if RENDER_ROTATE != 0:
+            im.rotate(RENDER_ROTATE, expand=True)
+        im.save(temp_output, optimize=True)
 
     temp_output.rename(OUTPUT_PATH)
