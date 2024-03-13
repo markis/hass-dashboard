@@ -168,7 +168,8 @@ async def generate_image() -> None:
             "--use-fake-device-for-media-stream",
         ],
     )
-    temp_output = Path(OUTPUT_PATH).with_suffix(".tmp.png")
+    output_path = Path(OUTPUT_PATH)
+    temp_output = output_path.with_suffix(f".tmp{output_path.suffix}")
     hti.screenshot(html_str=rendered_html, css_str=css_str, save_as=str(temp_output))
 
     if RENDER_ROTATE != 0:
