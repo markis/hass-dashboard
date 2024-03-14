@@ -16,13 +16,13 @@ from dashboard.calendar import TZ, Event, get_calendars
 from dashboard.weather import Weather, get_weather
 
 API_URL: Final = os.getenv("HOMEASSISTANT_URL", "")
-TOKEN: Final = os.getenv("HOMEASSISTANT_TOKEN", "")
-OUTPUT_PATH: Final = os.getenv("OUTPUT_PATH", "output.png")
 CALENDAR_ENTITY_IDS: Final = os.getenv("HOMEASSISTANT_CALENDARS", "").split(",")
-WEATHER_ENTITY_ID: Final = os.getenv("HOMEASSISTANT_WEATHER_ENTITY_ID", "weather.openweathermap")
-RENDER_WIDTH: Final = int(os.getenv("RENDER_WIDTH", "820"))
+OUTPUT_PATH: Final = os.getenv("OUTPUT_PATH", "output.png")
 RENDER_HEIGHT: Final = int(os.getenv("RENDER_HEIGHT", "1200"))
 RENDER_ROTATE: Final = int(os.getenv("RENDER_ROTATE", "270"))
+RENDER_WIDTH: Final = int(os.getenv("RENDER_WIDTH", "820"))
+TOKEN: Final = os.getenv("HOMEASSISTANT_TOKEN", "")
+WEATHER_ENTITY_ID: Final = os.getenv("HOMEASSISTANT_WEATHER_ENTITY_ID", "weather.openweathermap")
 
 
 @dataclass(order=True)
@@ -174,7 +174,8 @@ async def generate_image() -> None:
 
     with Image.open(temp_output) as im:
         if RENDER_ROTATE != 0:
-            im.rotate(RENDER_ROTATE, expand=True)
-        im.save(temp_output, optimize=True)
+            im.rotate(RENDER_ROTATE, expand=True).save(temp_output, optimize=True)
+        else:
+            im.save(temp_output, optimize=True)
 
     temp_output.rename(OUTPUT_PATH)
