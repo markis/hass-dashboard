@@ -1,47 +1,17 @@
-import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Final
+from typing import Final, cast
 
-import Levenshtein
-from aiohttp.client import ClientSession
+from pyowm import OWM
+from pyowm.weatherapi25.one_call import OneCall
+from pyowm.weatherapi25.one_call import Weather as OneCallWeather
 
-WEATHER_ICON_NAMES: Final = {
-    "day-sunny",
-    "cloud",
-    "cloudy",
-    "cloudy-gusts",
-    "cloudy-windy",
-    "fog",
-    "hail",
-    "rain",
-    "rain-mix",
-    "rain-wind",
-    "showers",
-    "sleet",
-    "snow",
-    "sprinkle",
-    "storm-showers",
-    "thunderstorm",
-    "snow-wind",
-    "smog",
-    "smoke",
-    "lightning",
-    "raindrops",
-    "dust",
-    "snowflake-cold",
-    "windy",
-    "strong-wind",
-    "sandstorm",
-    "earthquake",
-    "fire",
-    "flood",
-    "meteor",
-    "tsunami",
-    "volcano",
-    "hurricane",
-    "tornado",
-}
+from dashboard.calendar import TZ
+
+THUNDERSTORM: Final = 200
+DRIZZLE: Final = 300
+RAIN: Final = 500
+SNOW: Final = 600
 
 
 @dataclass(frozen=True, order=True)
@@ -58,15 +28,15 @@ class Forecast:
         return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Forecast":
-        condition = d["condition"]
-        weather_class, condition = _weather_to_icon_name(condition)
+    def from_one_call(cls, w: OneCallWeather) -> "Forecast":
+        condition = w.status
+        weather_class, condition = _weather_to_icon_name(w.weather_code)
         return cls(
             condition=condition,
             weather_class=weather_class,
-            date=cls.get_datetime(d["datetime"]),
-            high_temp=d["temperature"],
-            low_temp=d["templow"],
+            date=datetime.fromtimestamp(w.ref_time, tz=TZ),
+            high_temp=int(w.temp["max"]),
+            low_temp=int(w.temp["min"]),
         )
 
 
@@ -81,11 +51,12 @@ class Weather:
     weather_class: str
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Weather":
-        condition = d["state"]
-        weather_class, condition = _weather_to_icon_name(condition)
-        temperature = d["attributes"]["temperature"]
-        forecasts = sorted(Forecast.from_dict(forecast) for forecast in d["attributes"]["forecast"])
+    def from_one_call(cls, one: OneCall) -> "Weather":
+        condition = one.current.status
+        weather_class, condition = _weather_to_icon_name(one.current.weather_code)
+        temperature = int(one.current.temp["temp"])
+        forecast_daily = cast(list[OneCallWeather], one.forecast_daily)
+        forecasts = sorted(Forecast.from_one_call(forecast) for forecast in forecast_daily)
         todays_forecast = forecasts.pop(0)
         high_temp = todays_forecast.high_temp
         low_temp = todays_forecast.low_temp
@@ -99,66 +70,75 @@ class Weather:
         )
 
 
-async def get_weather(session: ClientSession, api_url: str, weather_entity_id: str) -> Weather:
-    url = f"{api_url}states/{weather_entity_id}"
-    async with session.get(url, headers={"Content-Type": "application/json"}) as resp:
-        data = await resp.text()
-        result = json.loads(data)
-    return Weather.from_dict(result)
+async def get_weather(openweather_api_key: str, lat: float, lon: float) -> Weather:
+    owm = OWM(openweather_api_key)
+    mgr = owm.weather_manager()
+    one = mgr.one_call(lat=lat, lon=lon, exclude="minutely,hourly", units="imperial")
+
+    return Weather.from_one_call(one)
 
 
-def _weather_to_icon_name(weather_condition: str) -> tuple[str, str]:
+def _weather_to_icon_name(weather_code: int) -> tuple[str, str]:
+    """
+    Convert a weather code to a Weather Icons icon name.
+
+    From https://openweathermap.org/weather-conditions
+    CSS class names are from https://erikflowers.github.io/weather-icons/
+    """
     css_class = "na"
-    name = weather_condition
-    match weather_condition:
-        case "clear-night":
-            css_class = "stars"
-            name = "Clear"
-        case "cloudy":
-            css_class = "cloudy"
-            name = "Cloudy"
-        case "exceptional":
-            css_class = "fire"
-            name = "Exceptional"
-        case "fog":
-            css_class = "day-fog"
-            name = "Fog"
-        case "hail":
-            css_class = "hail"
-            name = "Hail"
-        case "lightning-rainy" | "lightning":
-            css_class = "storm-showers"
+    name = "Unknown"
+
+    match weather_code:
+        case _ if THUNDERSTORM <= weather_code <= THUNDERSTORM + 99:
+            css_class = "thunderstorm"
             name = "Thunderstorm"
-        case "partlycloudy":
-            css_class = "day-cloudy"
-            name = "Partly Cloudy"
-        case "pouring":
+        case _ if DRIZZLE <= weather_code <= DRIZZLE + 99:
+            css_class = "sprinkle"
+            name = "Drizzle"
+        case _ if RAIN <= weather_code <= RAIN + 99:
             css_class = "rain"
-            name = "Heavy Rain"
-        case "rainy":
-            css_class = "showers"
-            name = "Rainy"
-        case "snowy-rainy":
-            css_class = "rain-mix"
-            name = "Snow-Rain mix"
-        case "snowy":
-            css_class = "snowflake-cold"
-            name = "Snowy"
-        case "sunny":
-            css_class = "day-sunny"
-            name = "Sunny"
-        case "windy-variant" | "windy":
+            name = "Rain"
+        case _ if SNOW <= weather_code <= SNOW + 99:
+            css_class = "snow"
+            name = "Snow"
+        case 701:
+            css_class = "fog"
+            name = "Mist"
+        case 711:
+            css_class = "smoke"
+            name = "Smoke"
+        case 721:
+            css_class = "day-haze"
+            name = "Haze"
+        case 731 | 761:
+            css_class = "dust"
+            name = "Dust"
+        case 741:
+            css_class = "fog"
+            name = "Fog"
+        case 751:
+            css_class = "sandstorm"
+            name = "Sand"
+        case 762:
+            css_class = "volcano"
+            name = "Ash"
+        case 771:
             css_class = "strong-wind"
-            name = "Windy"
-        case _:
-            if weather_condition in WEATHER_ICON_NAMES:
-                css_class = weather_condition
-            else:
-                min_distance = -1
-                for candidate in WEATHER_ICON_NAMES:
-                    distance = Levenshtein.distance(weather_condition, candidate)
-                    if distance < min_distance:
-                        min_distance = distance
-                        css_class = candidate
+            name = "Squall"
+        case 781:
+            css_class = "tornado"
+            name = "Tornado"
+        case 800:
+            css_class = "day-sunny"
+            name = "Clear"
+        case 801:
+            css_class = "cloud"
+            name = "Few Clouds"
+        case 802 | 803:
+            css_class = "cloudy"
+            name = "Partly Cloudy"
+        case 804:
+            css_class = "cloudy"
+            name = "Overcast"
 
     return f"wi wi-{css_class}", name

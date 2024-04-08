@@ -6,14 +6,14 @@ build-backend = "hatchling.build"
 name = "dashboard"
 version = "1.0.0"
 authors = [{name = "Markis Taylor", email = "m@rkis.net"}]
-description = "Home Assistant Dashboard"
+description = "Home Dashboard"
 requires-python = ">=3.11"
 dependencies = [
   "aiohttp>=3.9.3,<4",
   "html2image>=2.0.4.3,<3",
   "jinja2>=3.1.3,<4",
   "pillow>=10.2.0,<11",
-  "python-levenshtein>=0.24.0,<1"
+  "pyowm>=3.3.0,<4",
 ]
 
 [project.optional-dependencies]

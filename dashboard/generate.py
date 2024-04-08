@@ -22,7 +22,9 @@ RENDER_HEIGHT: Final = int(os.getenv("RENDER_HEIGHT", "1200"))
 RENDER_ROTATE: Final = int(os.getenv("RENDER_ROTATE", "270"))
 RENDER_WIDTH: Final = int(os.getenv("RENDER_WIDTH", "820"))
 TOKEN: Final = os.getenv("HOMEASSISTANT_TOKEN", "")
-WEATHER_ENTITY_ID: Final = os.getenv("HOMEASSISTANT_WEATHER_ENTITY_ID", "weather.openweathermap")
+OPENWEATHER_API_KEY: Final = os.getenv("OPENWEATHERMAP_API_KEY", "")
+LATITUDE: Final = float(os.getenv("LATITUDE", "0"))
+LONGITUDE: Final = float(os.getenv("LONGITUDE", "0"))
 
 
 @dataclass(order=True)
@@ -92,7 +94,7 @@ async def fetch_data(
     Returns:
         A tuple containing weather data and calendar events.
     """
-    weather_task = get_weather(session, api_url, WEATHER_ENTITY_ID)
+    weather_task = get_weather(OPENWEATHER_API_KEY, LATITUDE, LONGITUDE)
     events_task = get_calendars(session, api_url, calendars, today, end)
     task_results = await asyncio.gather(*[weather_task, events_task])
     weather = cast(Weather, task_results[0])
