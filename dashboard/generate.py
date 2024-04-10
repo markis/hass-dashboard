@@ -13,7 +13,7 @@ from PIL import Image
 
 from dashboard.auth import BearerAuth
 from dashboard.calendar import TZ, Event, get_calendars
-from dashboard.weather import Weather, get_weather
+from dashboard.weather import Forecast, HourlyForecast, Weather, get_weather
 
 API_URL: Final = os.getenv("HOMEASSISTANT_URL", "")
 CALENDAR_ENTITY_IDS: Final = os.getenv("HOMEASSISTANT_CALENDARS", "").split(",")
@@ -129,6 +129,89 @@ def get_file_contents(file_path: Path) -> str:
         return f.read()
 
 
+def draw_weather_forecast(
+    forecasts: list[HourlyForecast],
+    width: int = 400,
+    height: int = 80,
+    padding: int = 20,
+) -> str | None:
+    """Draw a weather forecast as an SVG image."""
+    import re
+
+    import drawsvg as draw
+    import numpy as np
+    from scipy.interpolate import CubicSpline
+    from scour import scour
+
+    forecasts = forecasts[:24]
+
+    # Initialize drawing with width and height
+    d = draw.Drawing(width, height)
+
+    # Get min and max temperatures for scaling
+    min_temp = min(f.temp for f in forecasts)
+    max_temp = max(f.temp for f in forecasts)
+
+    # Get start and end times for scaling
+    start_time = min(f.date for f in forecasts)
+    end_time = max(f.date for f in forecasts)
+
+    # Pre-compute scaling factors
+    x_scale = (width - padding * 1.5) / (end_time - start_time).total_seconds()
+    y_scale = (height - padding * 1.5) / (max_temp - min_temp)
+
+    # Function to convert temperature and time to x and y coordinates
+    def get_coords(temp: int, time: datetime) -> tuple[float, float]:
+        x = padding * 1.5 + (time - start_time).total_seconds() * x_scale
+        y = height - padding - (temp - min_temp) * y_scale
+        return x, y
+
+    # Prepare data for interpolation in one pass
+    x_data, y_data = zip(*[get_coords(f.temp, f.date) for f in forecasts], strict=True)
+
+    # Create cubic spline to smooth the line
+    cs = CubicSpline(x_data, y_data)
+
+    # Draw smooth line
+    xnew = np.linspace(min(x_data), max(x_data), 100)
+    ynew = cs(xnew)
+
+    # Create a single polyline instead of multiple lines
+    points = list(zip(xnew, ynew, strict=True))
+    path = draw.Path(stroke_width=5, stroke="black", fill="none")
+    path.M(points[0][0], points[0][1])
+    for x, y in points[1:]:
+        path.L(x, y)
+    d.append(path)
+
+    # Add x and y labels
+    d.append(draw.Text(text=f"{int(min_temp)}°", font_size=20, x=0, y=height - 20))
+    d.append(draw.Text(text=f"{int(max_temp)}°", font_size=20, x=0, y=20))
+
+    # First, middle, and last time labels
+    text = forecasts[0].date.strftime("%-I%p")
+    d.append(draw.Text(text=text, font_size=20, x=30, y=height))
+    text = forecasts[int(len(forecasts) / 2)].date.strftime("%-I%p")
+    d.append(draw.Text(text=text, font_size=20, x=int((width - 20) / 2), y=height))
+    text = forecasts[-1].date.strftime("%-I%p")
+    d.append(draw.Text(text=text, font_size=20, x=width, y=height, text_anchor="end"))
+
+    svg = d.as_svg()
+    if svg is None:
+        return None
+
+    options = scour.sanitizeOptions()
+    options.digits = 3
+    options.cdigits = 3
+    options.enable_viewboxing = False
+    options.strip_xml_prolog = True
+    options.indent_type = "none"
+
+    # Return SVG source
+    optimized_svg = scour.scourString(svg, options)
+    return re.sub(r">\s+<", "><", optimized_svg)
+
+
 async def generate_image() -> None:
     """Generate HTML content based on calendar and weather data and write it to an output file."""
     import dashboard
@@ -144,12 +227,19 @@ async def generate_image() -> None:
         weather, events = await fetch_data(session, API_URL, CALENDAR_ENTITY_IDS, current_date, end)
 
     dates_with_events = generate_dates_with_events(dates, events, current_date)
+    hourly_svg = draw_weather_forecast(weather.hourly)
 
     template = get_template(dashboard_template)
     rendered_html = template.render(
-        weather=weather, dates_with_events=dates_with_events, events=events
+        weather=weather, dates_with_events=dates_with_events, events=events, hourly_svg=hourly_svg
     )
     css_str = get_file_contents(dashboard_css)
+    Path("./output.html").write_text(
+        f"""
+        <link rel="stylesheet" href="./dashboard/static/style.css" />
+        {rendered_html}
+        """
+    )
 
     hti = Html2Image(
         size=(RENDER_WIDTH, RENDER_HEIGHT),

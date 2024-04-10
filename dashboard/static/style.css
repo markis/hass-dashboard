@@ -13,7 +13,7 @@ html {
 }
 
 body {
-  background: #FFFFFF;
+  background: #ffffff;
   color: #000000;
   font-size: 2rem;
   font-weight: 700;
@@ -34,7 +34,7 @@ section {
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.75);
   overflow: hidden;
-  white-space: 'nowrap';
+  white-space: "nowrap";
 }
 
 h1 {
@@ -49,16 +49,21 @@ h3 {
   font-size: 2.5rem;
 }
 
+h4 {
+  font-size: 2rem;
+}
+
 .weather {
   padding-bottom: 0.5rem;
 }
 .weather .today-forecast {
-  margin: 0 4rem;
-  padding: 2rem;
+  margin: 2rem 4rem;
+  padding: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+.weather .today-forecast .condition,
 .weather .today-forecast .temperatures {
   text-align: center;
 }
