@@ -13,7 +13,7 @@ from PIL import Image
 
 from dashboard.auth import BearerAuth
 from dashboard.calendar import TZ, Event, get_calendars
-from dashboard.weather import Forecast, HourlyForecast, Weather, get_weather
+from dashboard.weather import HourlyForecast, Weather, get_weather
 
 API_URL: Final = os.getenv("HOMEASSISTANT_URL", "")
 CALENDAR_ENTITY_IDS: Final = os.getenv("HOMEASSISTANT_CALENDARS", "").split(",")

@@ -22,7 +22,8 @@ class Cache(Generic[T]):
             now = datetime.now(tz=TZ).timestamp()
             if self.path.exists() and last_modified + self.expiration > now:
                 with self.path.open("rb") as f:
-                    return pickle.load(f)
+                    data: T = pickle.load(f)
+                    return data
         except (FileNotFoundError, pickle.UnpicklingError):
             pass
         return None

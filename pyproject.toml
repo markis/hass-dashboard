@@ -98,7 +98,7 @@ line-length = 100
 select = [
   "A", "ARG", "B", "BLE", "C4", "C90", "COM818", "DTZ", "EM", "ERA", "EXE", "E", "FA", "FBT", "F", "FIX", "G", "I",
   "ICN", "INP", "INT", "I", "ISC", "PGH", "PIE", "PL", "PTH", "PYI", "PT", "Q", "Q", "RET", "RSE", "RUF", "SIM",
-  "SLOT", "SLF", "S", "T10", "T20", "TD", "TRY", "TCH", "UP", "UP", "W", "YTT"
+  "SLOT", "SLF", "T10", "T20", "TD", "TRY", "TCH", "UP", "UP", "W", "YTT"
 ]
 
 [tool.ruff.per-file-ignores]
