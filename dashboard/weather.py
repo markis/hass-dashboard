@@ -1,17 +1,39 @@
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Final, cast
 
 from pyowm import OWM
 from pyowm.weatherapi25.one_call import OneCall
 from pyowm.weatherapi25.one_call import Weather as OneCallWeather
 
+from dashboard.cache import Cache
 from dashboard.calendar import TZ
 
+CACHE: "Cache[Weather]" = Cache(Path("weather.pickle"), 3600)
 THUNDERSTORM: Final = 200
 DRIZZLE: Final = 300
 RAIN: Final = 500
 SNOW: Final = 600
+
+
+@dataclass(frozen=True, order=True)
+class HourlyForecast:
+    date: datetime
+
+    temp: int
+    condition: str
+    weather_class: str
+
+    @classmethod
+    def from_one_call(cls, w: OneCallWeather) -> "HourlyForecast":
+        weather_class, condition = _weather_to_icon_name(w.weather_code)
+        return cls(
+            condition=condition,
+            weather_class=weather_class,
+            date=datetime.fromtimestamp(w.ref_time, tz=TZ),
+            temp=int(w.temp["temp"]),
+        )
 
 
 @dataclass(frozen=True, order=True)
@@ -23,13 +45,8 @@ class Forecast:
     condition: str
     weather_class: str
 
-    @staticmethod
-    def get_datetime(date_str: str) -> datetime:
-        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
-
     @classmethod
     def from_one_call(cls, w: OneCallWeather) -> "Forecast":
-        condition = w.status
         weather_class, condition = _weather_to_icon_name(w.weather_code)
         return cls(
             condition=condition,
@@ -44,6 +61,7 @@ class Forecast:
 class Weather:
     temperature: int
     forecasts: list[Forecast]
+    hourly: list[HourlyForecast]
 
     high_temp: int
     low_temp: int
@@ -52,11 +70,12 @@ class Weather:
 
     @classmethod
     def from_one_call(cls, one: OneCall) -> "Weather":
-        condition = one.current.status
         weather_class, condition = _weather_to_icon_name(one.current.weather_code)
         temperature = int(one.current.temp["temp"])
         forecast_daily = cast(list[OneCallWeather], one.forecast_daily)
         forecasts = sorted(Forecast.from_one_call(forecast) for forecast in forecast_daily)
+        forecast_hourly = cast(list[OneCallWeather], one.forecast_hourly)
+        hourly = sorted(HourlyForecast.from_one_call(forecast) for forecast in forecast_hourly)
         todays_forecast = forecasts.pop(0)
         high_temp = todays_forecast.high_temp
         low_temp = todays_forecast.low_temp
@@ -67,15 +86,22 @@ class Weather:
             high_temp=high_temp,
             low_temp=low_temp,
             forecasts=forecasts,
+            hourly=hourly,
         )
 
 
 async def get_weather(openweather_api_key: str, lat: float, lon: float) -> Weather:
+    data = CACHE.load_cache()
+    if data is not None:
+        return data
+
     owm = OWM(openweather_api_key)
     mgr = owm.weather_manager()
-    one = mgr.one_call(lat=lat, lon=lon, exclude="minutely,hourly", units="imperial")
-
-    return Weather.from_one_call(one)
+    one = mgr.one_call(lat=lat, lon=lon, exclude="minutely", units="imperial")
+    data = Weather.from_one_call(one)
+    if data is not None:
+        CACHE.save_cache(data)
+    return data
 
 
 def _weather_to_icon_name(weather_code: int) -> tuple[str, str]:

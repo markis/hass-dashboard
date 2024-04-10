@@ -1,10 +1,14 @@
 <section class="weather">
   <header class="today-forecast">
-    <h1><i class="{{ weather.weather_class }}"></i> {{ weather.condition.capitalize() }}</h1>
     <span class="temperatures">
       <h2>{{ weather.temperature }}&deg;</h2>
       <h3>{{ weather.high_temp }}&deg; / {{ weather.low_temp }}&deg;</h3>
     </span>
+    <span class="condition">
+      <h1><i class="{{ weather.weather_class }}"></i></h1>
+      <h3>{{ weather.condition }}</h3>
+    </span>
+    <span class="hourly"> {{ hourly_svg }} </span>
   </header>
   <ul class="weekly-forecast">
     {% for forecast in weather.forecasts %}
@@ -27,40 +31,42 @@
     {% endfor %}
   </ul>
   <ul class="calendar_dates">
-    {% for date in dates_with_events %}
-      {% if date.events > 0 %}
-        <li class="highlight {% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}">
-          {{ date.day.strftime('%d') }} 
-          {% if date.events > 1 %}
-            <span>{{ date.events }}</span>
-          {% endif %}
-        </li>
-      {% else %}
-        <li class="{% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}">
-          {{ date.day.strftime('%d') }}
-        </li>
+    {% for date in dates_with_events %} {% if date.events > 0 %}
+    <li
+      class="highlight {% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}"
+    >
+      {{ date.day.strftime('%d') }} {% if date.events > 1 %}
+      <span>{{ date.events }}</span>
       {% endif %}
-    {% endfor %}
+    </li>
+    {% else %}
+    <li
+      class="{% if date.is_today %}active{% endif %} {% if date.is_past %}past{% endif %}"
+    >
+      {{ date.day.strftime('%d') }}
+    </li>
+    {% endif %} {% endfor %}
   </ul>
 </section>
 
 <section class="events">
   <ul class="events_list">
-    {% for date in events %}
-      {% if events[date] %}
-        <li class="events_list_group">
-          <span class="day">{{ date.strftime('%A') }}</span>
-          <span class="date">{{ date.strftime('%B %d') }}</span>
-          <ul>
-            {% for event in events[date] %}
-            <li>
-              <span class="time">{{ event.start.strftime('%I:%M %p') }} - {{ event.end.strftime('%I:%M %p') }}</span>
-              <span class="name">{{ event.name }}</span>
-            </li>
-            {% endfor %}
-          </ul>
+    {% for date in events %} {% if events[date] %}
+    <li class="events_list_group">
+      <span class="day">{{ date.strftime('%A') }}</span>
+      <span class="date">{{ date.strftime('%B %d') }}</span>
+      <ul>
+        {% for event in events[date] %}
+        <li>
+          <span class="time"
+            >{{ event.start.strftime('%I:%M %p') }} - {{
+            event.end.strftime('%I:%M %p') }}</span
+          >
+          <span class="name">{{ event.name }}</span>
         </li>
-      {% endif %}
-    {% endfor %}
+        {% endfor %}
+      </ul>
+    </li>
+    {% endif %} {% endfor %}
   </ul>
 </section>

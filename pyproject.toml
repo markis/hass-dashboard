@@ -10,10 +10,13 @@ description = "Home Dashboard"
 requires-python = ">=3.11"
 dependencies = [
   "aiohttp>=3.9.3,<4",
+  "drawsvg>=2.3.0,<3",
   "html2image>=2.0.4.3,<3",
   "jinja2>=3.1.3,<4",
   "pillow>=10.2.0,<11",
   "pyowm>=3.3.0,<4",
+  "scipy>=1.13.0,<2",
+  "scour>=0.38.2,<1",
 ]
 
 [project.optional-dependencies]
@@ -95,7 +98,7 @@ line-length = 100
 select = [
   "A", "ARG", "B", "BLE", "C4", "C90", "COM818", "DTZ", "EM", "ERA", "EXE", "E", "FA", "FBT", "F", "FIX", "G", "I",
   "ICN", "INP", "INT", "I", "ISC", "PGH", "PIE", "PL", "PTH", "PYI", "PT", "Q", "Q", "RET", "RSE", "RUF", "SIM",
-  "SLOT", "SLF", "S", "T10", "T20", "TD", "TRY", "TCH", "UP", "UP", "W", "YTT"
+  "SLOT", "SLF", "T10", "T20", "TD", "TRY", "TCH", "UP", "UP", "W", "YTT"
 ]
 
 [tool.ruff.per-file-ignores]
