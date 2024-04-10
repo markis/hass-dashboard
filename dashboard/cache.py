@@ -1,6 +1,4 @@
-import pickle
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Final, Generic, TypeVar
 
 from dashboard.calendar import TZ
@@ -9,25 +7,22 @@ T = TypeVar("T")
 
 
 class Cache(Generic[T]):
-    path: Final[Path]
+    _cache: dict[str, tuple[T, datetime]]
     expiration: Final[int]
 
-    def __init__(self, path: Path, expiration: int) -> None:
-        self.path = path
+    def __init__(self, expiration: int) -> None:
+        self._cache = {}
         self.expiration = expiration
 
-    def load_cache(self) -> T | None:
-        try:
-            last_modified = self.path.stat().st_mtime
-            now = datetime.now(tz=TZ).timestamp()
-            if self.path.exists() and last_modified + self.expiration > now:
-                with self.path.open("rb") as f:
-                    data: T = pickle.load(f)
-                    return data
-        except (FileNotFoundError, pickle.UnpicklingError):
-            pass
+    def load(self, key: str) -> T | None:
+        if key in self._cache:
+            data, last_modified = self._cache[key]
+            now = datetime.now(tz=TZ)
+            if last_modified + timedelta(seconds=self.expiration) > now:
+                return data
+
+            del self._cache[key]
         return None
 
-    def save_cache(self, data: T) -> None:
-        with self.path.open("wb") as f:
-            pickle.dump(data, f)
+    def save(self, key: str, data: T) -> None:
+        self._cache[key] = (data, datetime.now(tz=TZ))

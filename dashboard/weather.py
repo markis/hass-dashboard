@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Final, cast
 
 from pyowm import OWM
@@ -10,11 +9,11 @@ from pyowm.weatherapi25.one_call import Weather as OneCallWeather
 from dashboard.cache import Cache
 from dashboard.calendar import TZ
 
-CACHE: "Cache[Weather]" = Cache(Path("weather.pickle"), 3600)
 THUNDERSTORM: Final = 200
 DRIZZLE: Final = 300
 RAIN: Final = 500
 SNOW: Final = 600
+weather_cache: "Cache[Weather]" = Cache(600)
 
 
 @dataclass(order=True)
@@ -91,7 +90,8 @@ class Weather:
 
 
 async def get_weather(openweather_api_key: str, lat: float, lon: float) -> Weather:
-    data = CACHE.load_cache()
+    cache_key = f"{lat},{lon}"
+    data = weather_cache.load(cache_key)
     if data is not None:
         return data
 
@@ -100,7 +100,7 @@ async def get_weather(openweather_api_key: str, lat: float, lon: float) -> Weath
     one = mgr.one_call(lat=lat, lon=lon, exclude="minutely", units="imperial")
     data = Weather.from_one_call(one)
     if data is not None:
-        CACHE.save_cache(data)
+        weather_cache.save(cache_key, data)
     return data
 
 
