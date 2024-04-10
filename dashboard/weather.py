@@ -17,7 +17,7 @@ RAIN: Final = 500
 SNOW: Final = 600
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True)
 class HourlyForecast:
     date: datetime
 
@@ -36,7 +36,7 @@ class HourlyForecast:
         )
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True)
 class Forecast:
     date: datetime
 
@@ -57,7 +57,7 @@ class Forecast:
         )
 
 
-@dataclass(frozen=True)
+@dataclass()
 class Weather:
     temperature: int
     forecasts: list[Forecast]
