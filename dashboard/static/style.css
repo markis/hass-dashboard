@@ -31,8 +31,8 @@ section {
   max-width: 780px;
   margin: 20px auto;
   background-color: #ffffff;
+  border: 1px solid #e1e1e1;
   border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.75);
   overflow: hidden;
   white-space: "nowrap";
 }
@@ -53,8 +53,18 @@ h4 {
   font-size: 2rem;
 }
 
+h5 {
+  font-size: 1.5rem;
+}
+
 .weather {
   padding-bottom: 0.5rem;
+}
+.weather .hourly-forecast {
+  width: 37rem;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
 }
 .weather .today-forecast {
   margin: 2rem 4rem;
@@ -67,10 +77,12 @@ h4 {
 .weather .today-forecast .temperatures {
   text-align: center;
 }
+.weather .hourly-forecast,
 .weather .weekly-forecast {
   display: flex;
   justify-content: space-around;
 }
+.weather .hourly-forecast .hour,
 .weather .weekly-forecast .day {
   text-align: center;
 }
