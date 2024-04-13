@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Final, cast
 
 import aiohttp
-from drawsvg import url_encode
 from html2image import Html2Image
 from jinja2 import Template
 from PIL import Image
