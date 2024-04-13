@@ -31,7 +31,7 @@ section {
   max-width: 780px;
   margin: 20px auto;
   background-color: #ffffff;
-  border: solid 3px rgba(0, 0, 0, 0.25);
+  border: solid 3px black;
   border-radius: 8px;
   overflow: hidden;
   white-space: "nowrap";
@@ -97,7 +97,7 @@ h5 {
   justify-content: space-between;
   align-items: center;
   font-weight: bold;
-  border-bottom: solid 3px rgba(0, 0, 0, 0.25);
+  border-bottom: solid 3px black;
 }
 .calendar_days li {
   flex: 1;
