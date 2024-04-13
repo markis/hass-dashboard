@@ -60,6 +60,12 @@ h5 {
 .weather {
   padding-bottom: 0.5rem;
 }
+.weather .hourly-forecast {
+  width: 37rem;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
 .weather .today-forecast {
   margin: 2rem 4rem;
   padding: 0;
