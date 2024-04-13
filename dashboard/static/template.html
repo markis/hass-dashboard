@@ -1,3 +1,14 @@
+<style>
+  .hourly-forecast {
+    width: 400px;
+    height: 80px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-image: {{ hourly_svg }};
+  }
+</style>
+
 <section class="weather">
   <header class="today-forecast">
     <span class="temperatures">
@@ -8,7 +19,17 @@
       <h1><i class="{{ weather.weather_class }}"></i></h1>
       <h3>{{ weather.condition }}</h3>
     </span>
-    <span class="hourly"> {{ hourly_svg }} </span>
+    <ul class="hourly-forecast">
+      {% for forecast in hourly %}
+      <li class="hour">
+        <h5>{{ forecast.date.strftime('%I%p').strip("0") }}</h5>
+        <h3><i class="fa-solid {{ forecast.weather_class }}"></i></h3>
+        <ul class="temperatures">
+          <li class="hi">{{ forecast.temp }}&deg;</li>
+        </ul>
+      </li>
+      {% endfor %}
+    </ul>
   </header>
   <ul class="weekly-forecast">
     {% for forecast in weather.forecasts %}
