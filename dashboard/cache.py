@@ -14,15 +14,16 @@ class Cache(Generic[T]):
         self._cache = {}
         self.expiration = expiration
 
-    def load(self, key: str) -> T | None:
+    def load(self, key: str) -> tuple[T | None, bool]:
+        """Return the data and a boolean indicating if the data is stale."""
         if key in self._cache:
             data, last_modified = self._cache[key]
             now = datetime.now(tz=TZ)
             if last_modified + timedelta(seconds=self.expiration) > now:
-                return data
+                return data, False
+            return data, True
 
-            del self._cache[key]
-        return None
+        return None, True
 
     def save(self, key: str, data: T) -> None:
         self._cache[key] = (data, datetime.now(tz=TZ))

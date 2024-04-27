@@ -1,13 +1,17 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final, cast
+from http import HTTPStatus
+from typing import Final, Self
 
-from pyowm import OWM
-from pyowm.weatherapi25.one_call import OneCall
-from pyowm.weatherapi25.one_call import Weather as OneCallWeather
+import aiohttp
 
 from dashboard.cache import Cache
 from dashboard.calendar import TZ
+from dashboard.typed_def import (
+    OneCallDailyWeather,
+    OneCallHourlyWeather,
+    OneCallWeatherData,
+)
 
 THUNDERSTORM: Final = 200
 DRIZZLE: Final = 300
@@ -25,13 +29,14 @@ class HourlyForecast:
     weather_class: str
 
     @classmethod
-    def from_one_call(cls, w: OneCallWeather) -> "HourlyForecast":
-        weather_class, condition = _weather_to_icon_name(w.weather_code)
+    def from_one_call(cls, w: OneCallHourlyWeather) -> Self:
+        weather_id = next(iter(w["weather"]), {"id": 0})["id"]
+        weather_class, condition = _weather_to_icon_name(weather_id)
         return cls(
             condition=condition,
             weather_class=weather_class,
-            date=datetime.fromtimestamp(w.ref_time, tz=TZ),
-            temp=int(w.temp["temp"]),
+            date=datetime.fromtimestamp(w["dt"], tz=TZ),
+            temp=int(w["temp"]),
         )
 
 
@@ -45,14 +50,15 @@ class Forecast:
     weather_class: str
 
     @classmethod
-    def from_one_call(cls, w: OneCallWeather) -> "Forecast":
-        weather_class, condition = _weather_to_icon_name(w.weather_code)
+    def from_one_call(cls, w: OneCallDailyWeather) -> Self:
+        weather_id = next(iter(w["weather"]), {"id": 0})["id"]
+        weather_class, condition = _weather_to_icon_name(weather_id)
         return cls(
             condition=condition,
             weather_class=weather_class,
-            date=datetime.fromtimestamp(w.ref_time, tz=TZ),
-            high_temp=int(w.temp["max"]),
-            low_temp=int(w.temp["min"]),
+            date=datetime.fromtimestamp(w["dt"], tz=TZ),
+            high_temp=int(w["temp"]["max"]),
+            low_temp=int(w["temp"]["min"]),
         )
 
 
@@ -68,13 +74,12 @@ class Weather:
     weather_class: str
 
     @classmethod
-    def from_one_call(cls, one: OneCall) -> "Weather":
-        weather_class, condition = _weather_to_icon_name(one.current.weather_code)
-        temperature = int(one.current.temp["temp"])
-        forecast_daily = cast(list[OneCallWeather], one.forecast_daily)
-        forecasts = sorted(Forecast.from_one_call(forecast) for forecast in forecast_daily)
-        forecast_hourly = cast(list[OneCallWeather], one.forecast_hourly)
-        hourly = sorted(HourlyForecast.from_one_call(forecast) for forecast in forecast_hourly)
+    def from_one_call(cls, one: OneCallWeatherData) -> Self:
+        weather_id = next(iter(one["current"]["weather"]), {"id": 0})["id"]
+        weather_class, condition = _weather_to_icon_name(weather_id)
+        temperature = int(one["current"]["temp"])
+        forecasts = sorted(Forecast.from_one_call(forecast) for forecast in one["daily"])
+        hourly = sorted(HourlyForecast.from_one_call(forecast) for forecast in one["hourly"])
         todays_forecast = forecasts.pop(0)
         high_temp = todays_forecast.high_temp
         low_temp = todays_forecast.low_temp
@@ -90,18 +95,39 @@ class Weather:
 
 
 async def get_weather(openweather_api_key: str, lat: float, lon: float) -> Weather:
-    cache_key = f"{lat},{lon}"
-    data = weather_cache.load(cache_key)
-    if data is not None:
-        return data
+    """
+    Fetch weather data using OpenWeatherMap's One Call API 3.0 asynchronously.
 
-    owm = OWM(openweather_api_key)
-    mgr = owm.weather_manager()
-    one = mgr.one_call(lat=lat, lon=lon, exclude="minutely", units="imperial")
-    data = Weather.from_one_call(one)
-    if data is not None:
-        weather_cache.save(cache_key, data)
-    return data
+    Args:
+        openweather_api_key: Your OpenWeatherMap API key
+        lat: Latitude of the location
+        lon: Longitude of the location
+
+    Returns:
+        Weather data class
+    """
+    cache_key = f"{lat},{lon}"
+    weather, stale = weather_cache.load(cache_key)
+    if weather is not None and not stale:
+        return weather
+
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "appid": openweather_api_key,
+        "units": "imperial",  # Use 'metric' for Celsius
+        "exclude": "minutely",  # Exclude minute-by-minute data
+    }
+    url = "https://api.openweathermap.org/data/3.0/onecall"
+
+    async with aiohttp.ClientSession() as session, session.get(url, params=params) as response:
+        if response.status == HTTPStatus.OK:
+            data = await response.json()
+            weather = Weather.from_one_call(data)
+            weather_cache.save(cache_key, weather)
+
+    assert weather is not None
+    return weather
 
 
 def _weather_to_icon_name(weather_code: int) -> tuple[str, str]:
