@@ -1,4 +1,4 @@
-FROM python:3.11 as builder
+FROM python:3.12 as builder
 ARG BUILD_VERSION=0.10.0
 
 WORKDIR /src
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/var/cache/pip/ \
   python -m build --wheel
 
 
-FROM python:3.11-slim as runtime
+FROM python:3.12-slim as runtime
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
   PIP_DISABLE_ROOT_WARNING=1 \
   PIP_ROOT_USER_ACTION=ignore \
