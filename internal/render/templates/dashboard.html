@@ -1,0 +1,85 @@
+<style>
+  .hourly-forecast {
+    background-image: {{ .HourlySVG }};
+  }
+</style>
+
+<section class="weather">
+  <header class="today-forecast">
+    <span class="temperatures">
+      <h2>{{ .Weather.Temperature }}&deg;</h2>
+      <h3>{{ .Weather.HighTemp }}&deg; / {{ .Weather.LowTemp }}&deg;</h3>
+    </span>
+    <span class="condition">
+      <h1><i class="{{ .Weather.WeatherClass }}"></i></h1>
+      <h3>{{ .Weather.Condition }}</h3>
+    </span>
+    <ul class="hourly-forecast">
+      {{ range .Hourly }}
+      <li class="hour">
+        <h5>{{ formatHour .Date }}</h5>
+        <h3><i class="fa-solid {{ .WeatherClass }}"></i></h3>
+        <ul class="temperatures">
+          <li class="hi">{{ .Temp }}&deg;</li>
+        </ul>
+      </li>
+      {{ end }}
+    </ul>
+  </header>
+  <ul class="weekly-forecast">
+    {{ range .Weather.Forecasts }}
+    <li class="day">
+      <span>{{ formatDay .Date }}</span>
+      <h2><i class="fa-solid {{ .WeatherClass }}"></i></h2>
+      <ul class="temperatures">
+        <li class="hi">{{ .HighTemp }}&deg;</li>
+        <li class="lo">{{ .LowTemp }}&deg;</li>
+      </ul>
+    </li>
+    {{ end }}
+  </ul>
+</section>
+
+<section class="calendar">
+  <ul class="calendar_days">
+    {{ range $i, $date := .DatesWithEvents }}{{ if lt $i 7 }}
+    <li>{{ formatDay $date.Day }}</li>
+    {{ end }}{{ end }}
+  </ul>
+  <ul class="calendar_dates">
+    {{ range .DatesWithEvents }}
+    {{ if gt .Events 0 }}
+    <li class="highlight {{ if .IsToday }}active{{ end }} {{ if .IsPast }}past{{ end }}">
+      {{ formatDayNumber .Day }}
+      {{ if gt .Events 1 }}<span>{{ .Events }}</span>{{ end }}
+    </li>
+    {{ else }}
+    <li class="{{ if .IsToday }}active{{ end }} {{ if .IsPast }}past{{ end }}">
+      {{ formatDayNumber .Day }}
+    </li>
+    {{ end }}
+    {{ end }}
+  </ul>
+</section>
+
+<section class="events">
+  <ul class="events_list">
+    {{ range .SortedDates }}
+    {{ $events := index $.Events . }}
+    {{ if $events }}
+    <li class="events_list_group">
+      <span class="day">{{ formatWeekday . }}</span>
+      <span class="date">{{ formatFullDate . }}</span>
+      <ul>
+        {{ range $events }}
+        <li>
+          <span class="time">{{ formatTime .Start }} - {{ formatTime .End }}</span>
+          <span class="name">{{ .Name }}</span>
+        </li>
+        {{ end }}
+      </ul>
+    </li>
+    {{ end }}
+    {{ end }}
+  </ul>
+</section>

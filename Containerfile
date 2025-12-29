@@ -1,47 +1,39 @@
-FROM python:3.12 as builder
-ARG BUILD_VERSION=0.10.0
+FROM golang:1.25 AS builder
 
 WORKDIR /src
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-  PIP_DISABLE_ROOT_WARNING=1 \
-  PIP_ROOT_USER_ACTION=ignore \
-  PIP_CACHE_DIR="/var/cache/pip/" \
-  HATCH_BUILD_HOOK_ENABLE_MYPYC=1
 
-COPY pyproject.toml /src/
-COPY dashboard/ /src/dashboard/
-RUN --mount=type=cache,target=/var/cache/pip/ \
-  --mount=type=bind,src=.git,dst=/src/.git \
-  pip install build~="$BUILD_VERSION"; \
-  python -m build --wheel
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY cmd ./cmd
+COPY internal ./internal
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /hass-dashboard ./cmd/hass-dashboard
 
 
-FROM python:3.12-slim as runtime
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-  PIP_DISABLE_ROOT_WARNING=1 \
-  PIP_ROOT_USER_ACTION=ignore \
-  PIP_CACHE_DIR="/var/cache/pip/" \
-  HATCH_BUILD_HOOK_ENABLE_MYPYC=1 \
-  TINI_VERSION="v0.19.0"
+FROM alpine:3.19 AS runtime
 
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-arm64 /tini
-RUN chmod +x /tini
-ENTRYPOINT ["/tini", "--"]
-CMD ["generate_dashboard"]
-WORKDIR "/src"
+LABEL org.opencontainers.image.source="https://github.com/markis/hass-dashboard" \
+    org.opencontainers.image.description="Home Assistant Dashboard - generates dashboard images from calendar and weather data" \
+    org.opencontainers.image.licenses="MIT"
 
-RUN groupadd --system --gid 888 bot && \
-  useradd --system --uid 888 --no-user-group --gid 888 \
-  --create-home --home-dir /home/bot --shell /bin/bash bot
+RUN apk add --no-cache \
+    chromium \
+    font-noto \
+    fontconfig \
+    ca-certificates \
+    tzdata \
+    && fc-cache -f -v \
+    && mkdir -p /tmp/chrome-data /tmp/chrome-crashpad && chmod 777 /tmp/chrome-data /tmp/chrome-crashpad
 
-RUN --mount=type=cache,target=/var/lib/apt/lists \
-  --mount=type=cache,target=/var/cache \
-  --mount=type=tmpfs,target=/var/log \
-  apt-get -y update; apt-get install -y chromium fonts-font-awesome fonts-lato fontconfig; \
-  fc-cache -f -v
+# Set chromium path for chromedp
+ENV CHROME_PATH=/usr/bin/chromium-browser
+# Disable Chrome crash reporting
+ENV CHROME_CRASHPAD_HANDLER_DISABLE=1
 
-RUN --mount=type=cache,target=/var/cache/pip/ \
-  --mount=type=bind,from=builder,src=/src/dist,target=/src/dist \
-  pip install /src/dist/*.whl;
+WORKDIR /app
 
-USER bot
+COPY --from=builder /hass-dashboard /app/hass-dashboard
+
+USER 65534:65534
+ENTRYPOINT ["/app/hass-dashboard", "--config", "/app/config.yaml"]

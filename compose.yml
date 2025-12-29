@@ -1,12 +1,10 @@
-version: "3.9"
-
 services:
   dashboard:
-    image: markis/hass-dashboard:latest
-    container_name: dashboard
-    env_file: .env
+    image: ghcr.io/markis/hass-dashboard:latest
+    container_name: hass-dashboard
     build:
       context: .
       dockerfile: Containerfile
     volumes:
-      - ./:/src
+      - ./config.yaml:/app/config.yaml:ro
+      - ./output:/output

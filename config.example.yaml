@@ -1,0 +1,36 @@
+# Home Assistant Dashboard Configuration
+
+home_assistant:
+  # URL to your Home Assistant instance API
+  url: "http://homeassistant.local:8123/api/"
+  # Long-lived access token from Home Assistant
+  # Generate at: Profile -> Security -> Long-Lived Access Tokens
+  token: "your-long-lived-access-token"
+  # List of calendar entity IDs to display
+  calendars:
+    - calendar.family
+    - calendar.work
+    - calendar.holidays
+
+openweathermap:
+  # API key from OpenWeatherMap
+  # Get one at: https://openweathermap.org/api
+  api_key: "your-openweathermap-api-key"
+  # Coordinates for weather data
+  latitude: 40.7128
+  longitude: -74.0060
+
+output:
+  # Path to save the generated dashboard image
+  path: "output.png"
+  # Image dimensions in pixels
+  width: 820
+  height: 1200
+  # Rotation in degrees (0, 90, 180, 270)
+  rotate: 270
+
+# Timezone for date/time display (IANA timezone name)
+timezone: "America/New_York"
+
+# How often to regenerate the dashboard (in seconds)
+refresh_interval: 600

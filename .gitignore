@@ -1,19 +1,10 @@
 /.env
 /.envrc
-__pycache__
 /build
-/dist
-/htmlcov
-/venv
 /.vscode
-/.coverage
-/.hypothesis
-/.pytest_cache
-/.mypy_cache
-/.ruff_cache
-
-*.pyc
-*.egg-info
 
 ignore*
 
+/output/
+*.png
+/config.yaml

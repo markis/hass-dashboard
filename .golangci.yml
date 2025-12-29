@@ -1,0 +1,160 @@
+version: "2"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/markis/hass-dashboard
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  default: all
+  disable:
+    # Too noisy or not applicable for this project.
+    - wrapcheck
+    - exhaustruct
+    - ireturn
+    - err113
+    - mnd              # Magic number detection is too strict.
+    - noinlineerr      # Inline error handling is fine.
+    - tagliatelle      # JSON tags match API response format.
+    - wsl              # Deprecated, replaced by wsl_v5.
+    - noctx            # Not needed for simple HTTP clients.
+    - perfsprint       # Minor optimization, not critical.
+
+  exclusions:
+    rules:
+      # Test files can be more relaxed.
+      - path: _test\.go
+        linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - goconst
+          - dupl
+          - varnamelen
+          - nestif
+          - errcheck
+          - paralleltest
+          - testpackage
+          - govet
+          - wsl_v5
+          - nlreturn
+
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: "io/ioutil"
+              desc: "Use io and os packages instead"
+            - pkg: "github.com/pkg/errors"
+              desc: "Use standard library errors package with fmt.Errorf"
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      exclude-functions:
+        - (io.Closer).Close
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    funlen:
+      lines: 100
+      statements: 50
+
+    gocognit:
+      min-complexity: 20
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - unnamedResult
+
+    gocyclo:
+      min-complexity: 15
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  # Struct field alignment is not critical.
+
+    lll:
+      line-length: 120
+
+    misspell:
+      locale: US
+
+    nakedret:
+      max-func-lines: 30
+
+    nestif:
+      min-complexity: 4
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    staticcheck:
+      checks:
+        - all
+        - -SA1019  # Ignore deprecation warnings.
+
+    varnamelen:
+      min-name-length: 2
+      ignore-names:
+        - err
+        - ok
+        - i
+        - j
+        - id
+        - tx
+        - db
+        - wg
+        - ctx
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
