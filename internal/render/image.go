@@ -111,7 +111,7 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 
 	_ = tempFile.Close() //nolint:errcheck // Error not relevant after successful write
 
-	if err := os.Chmod(tempPath, 0644); err != nil {
+	if err := os.Chmod(tempPath, 0o644); err != nil { //nolint:gosec // 644 permissions required for external access
 		_ = os.Remove(tempPath) //nolint:errcheck // Best effort cleanup
 
 		return fmt.Errorf("setting file permissions: %w", err)
