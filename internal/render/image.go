@@ -111,6 +111,12 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 
 	_ = tempFile.Close() //nolint:errcheck // Error not relevant after successful write
 
+	if err := os.Chmod(tempPath, 0644); err != nil {
+		_ = os.Remove(tempPath) //nolint:errcheck // Best effort cleanup
+
+		return fmt.Errorf("setting file permissions: %w", err)
+	}
+
 	if err := os.Rename(tempPath, config.OutputPath); err != nil {
 		_ = os.Remove(tempPath) //nolint:errcheck // Best effort cleanup
 
