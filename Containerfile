@@ -28,8 +28,11 @@ RUN apk add --no-cache \
 
 # Set chromium path for chromedp
 ENV CHROME_PATH=/usr/bin/chromium-browser
-# Disable Chrome crash reporting
+# Disable Chrome crash reporting completely
 ENV CHROME_CRASHPAD_HANDLER_DISABLE=1
+ENV CHROME_CRASHPAD_PIPE_NAME=
+ENV BREAKPAD_DUMP_LOCATION=/dev/null
+ENV CHROME_NO_FIRST_RUN=1
 
 WORKDIR /app
 

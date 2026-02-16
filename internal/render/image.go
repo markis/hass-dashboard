@@ -54,9 +54,14 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 		chromedp.Flag("hide-scrollbars", true),
 		chromedp.Flag("mute-audio", true),
 		chromedp.Flag("lang", "en"),
-		// Chrome 128+ crashpad fixes
+		// Chrome 128+ crashpad fixes - completely disable crashpad to avoid EAGAIN
 		chromedp.Flag("disable-crash-reporter", true),
-		chromedp.Flag("crash-dumps-dir", "/tmp/chrome-crashpad"),
+		chromedp.Flag("disable-breakpad", true),
+		chromedp.Flag("enable-crash-reporter", false),
+		chromedp.Flag("crash-dumps-dir", "/dev/null"),
+		chromedp.Flag("single-process", false), // Multi-process but limit spawning
+		chromedp.Flag("disable-setuid-sandbox", true),
+		chromedp.Env("CHROME_CRASHPAD_PIPE_NAME=", "BREAKPAD_DUMP_LOCATION=/dev/null"),
 		chromedp.Env("XDG_CONFIG_HOME=/tmp/chrome-data", "XDG_CACHE_HOME=/tmp/chrome-data"),
 		chromedp.UserDataDir("/tmp/chrome-data"),
 		chromedp.WindowSize(config.Width, config.Height),

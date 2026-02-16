@@ -8,3 +8,10 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./output:/output
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    pids_limit: 512
+    shm_size: 512m
