@@ -106,8 +106,10 @@ func (c *CalendarClient) fetchCalendarEvents(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
+	// #nosec G706 -- URL sanitized and validated by validateHTTPURL in NewCalendarClient
 	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String()))
 
+	// #nosec G704 -- URL validated by validateHTTPURL (scheme/host checked) in NewCalendarClient
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
