@@ -24,8 +24,34 @@ type ImageConfig struct {
 	OutputPath string
 }
 
+// validateOutputPath ensures the output path is safe and doesn't contain path traversal attempts.
+func validateOutputPath(path string) error {
+	// Check for literal .. in the path before cleaning (basic check)
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("invalid output path: contains path traversal")
+	}
+
+	// Clean the path to resolve any . components
+	cleaned := filepath.Clean(path)
+
+	// Ensure it's a valid path
+	if !filepath.IsAbs(cleaned) {
+		// Convert to absolute path to validate it
+		_, err := filepath.Abs(cleaned)
+		if err != nil {
+			return fmt.Errorf("resolving output path: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // Image takes HTML and CSS content and renders it to a PNG image.
 func Image(ctx context.Context, html, css string, config ImageConfig) error {
+	// Validate output path to prevent path traversal
+	if err := validateOutputPath(config.OutputPath); err != nil {
+		return err
+	}
 	// Create a full HTML document
 	fullHTML := fmt.Sprintf(`<!DOCTYPE html>
 <html>

@@ -104,8 +104,8 @@ refresh_interval: 300
 	}
 
 	// Check OpenWeatherMap config
-	if config.OpenWeatherMap.APIKey != "owm-api-key" {
-		t.Errorf("OpenWeatherMap.APIKey = %q, want %q", config.OpenWeatherMap.APIKey, "owm-api-key")
+	if config.OpenWeatherMap.Key != "owm-api-key" {
+		t.Errorf("OpenWeatherMap.Key = %q, want %q", config.OpenWeatherMap.Key, "owm-api-key")
 	}
 
 	if config.OpenWeatherMap.Latitude != 51.5074 {

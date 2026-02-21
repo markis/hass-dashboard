@@ -104,7 +104,7 @@ func (c *CalendarClient) fetchCalendarEvents(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Printf("Fetching calendar events from: %s", reqURL.String())
+	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String()))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -115,7 +115,7 @@ func (c *CalendarClient) fetchCalendarEvents(
 	if resp.StatusCode != http.StatusOK {
 		//nolint:errcheck // Best effort for error logging
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("Calendar API error (status %d): %s", resp.StatusCode, string(body))
+		log.Printf("Calendar API error (status %d): %s", resp.StatusCode, sanitizeLogData(string(body)))
 
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}

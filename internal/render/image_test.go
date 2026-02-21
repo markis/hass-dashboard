@@ -186,3 +186,41 @@ func TestImageConfig(t *testing.T) {
 		t.Errorf("OutputPath = %q, want %q", config.OutputPath, "/tmp/test.png")
 	}
 }
+
+func TestValidateOutputPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{
+			name:    "valid absolute path",
+			path:    "/output/dashboard.png",
+			wantErr: false,
+		},
+		{
+			name:    "valid relative path",
+			path:    "output/dashboard.png",
+			wantErr: false,
+		},
+		{
+			name:    "rejects path traversal with ..",
+			path:    "/output/../../../etc/passwd",
+			wantErr: true,
+		},
+		{
+			name:    "rejects sneaky path traversal",
+			path:    "/output/dashboard.png/../../../etc/passwd",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOutputPath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOutputPath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
+	}
+}

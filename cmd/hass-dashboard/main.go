@@ -35,7 +35,7 @@ type HomeAssistantConfig struct {
 
 // OpenWeatherConfig holds OpenWeatherMap configuration.
 type OpenWeatherConfig struct {
-	APIKey    string  `yaml:"api_key"`
+	Key       string  `yaml:"api_key"`
 	Latitude  float64 `yaml:"latitude"`
 	Longitude float64 `yaml:"longitude"`
 }
@@ -83,7 +83,7 @@ func main() {
 		config.HomeAssistant.Token,
 		loc,
 	)
-	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.APIKey, loc)
+	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
 
 	log.Println("Starting dashboard generator...")
 
