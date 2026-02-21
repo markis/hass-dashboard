@@ -166,9 +166,9 @@ func DrawWeatherForecast(forecasts []models.HourlyForecast, width, height, paddi
 		yCoord := float64(height-padding) - float64(forecast.Temp-minTemp)*yScale
 
 		if idx == 0 {
-			pathData.WriteString(fmt.Sprintf("M%.1f %.1f", xCoord, yCoord))
+			fmt.Fprintf(&pathData, "M%.1f %.1f", xCoord, yCoord)
 		} else {
-			pathData.WriteString(fmt.Sprintf(" L%.1f %.1f", xCoord, yCoord))
+			fmt.Fprintf(&pathData, " L%.1f %.1f", xCoord, yCoord)
 		}
 	}
 
