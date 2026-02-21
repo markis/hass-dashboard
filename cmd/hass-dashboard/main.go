@@ -64,15 +64,11 @@ func main() {
 	}
 
 	// Create clients (before context setup to allow fatal errors)
-	calendarClient, err := clients.NewCalendarClient(
+	calendarClient := clients.NewCalendarClient(
 		config.HomeAssistant.URL,
 		config.HomeAssistant.Token,
 		loc,
 	)
-	if err != nil {
-		log.Fatalf("Failed to create calendar client: %v", err)
-	}
-
 	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
 
 	// Set up context with cancellation

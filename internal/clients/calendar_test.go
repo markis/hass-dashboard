@@ -48,10 +48,7 @@ func TestCalendarClientGetCalendars(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewCalendarClient(server.URL+"/api/", "test-token", loc)
-	if err != nil {
-		t.Fatalf("Failed to create calendar client: %v", err)
-	}
+	client := NewCalendarClient(server.URL+"/api/", "test-token", loc)
 
 	result, err := client.GetCalendars(
 		context.Background(),
@@ -97,12 +94,9 @@ func TestCalendarClientGetCalendarsMultiple(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewCalendarClient(server.URL+"/api/", "token", loc)
-	if err != nil {
-		t.Fatalf("Failed to create calendar client: %v", err)
-	}
+	client := NewCalendarClient(server.URL+"/api/", "token", loc)
 
-	_, err = client.GetCalendars(
+	_, err := client.GetCalendars(
 		context.Background(),
 		[]string{"cal1", "cal2", "cal3"},
 		now,
@@ -125,12 +119,9 @@ func TestCalendarClientGetCalendarsError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewCalendarClient(server.URL+"/api/", "token", loc)
-	if err != nil {
-		t.Fatalf("Failed to create calendar client: %v", err)
-	}
+	client := NewCalendarClient(server.URL+"/api/", "token", loc)
 
-	_, err = client.GetCalendars(
+	_, err := client.GetCalendars(
 		context.Background(),
 		[]string{"test"},
 		time.Now(),
@@ -151,12 +142,9 @@ func TestCalendarClientGetCalendarsInvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewCalendarClient(server.URL+"/api/", "token", loc)
-	if err != nil {
-		t.Fatalf("Failed to create calendar client: %v", err)
-	}
+	client := NewCalendarClient(server.URL+"/api/", "token", loc)
 
-	_, err = client.GetCalendars(
+	_, err := client.GetCalendars(
 		context.Background(),
 		[]string{"test"},
 		time.Now(),
@@ -193,10 +181,7 @@ func TestCalendarClientSkipsInvalidEvents(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewCalendarClient(server.URL+"/api/", "token", loc)
-	if err != nil {
-		t.Fatalf("Failed to create calendar client: %v", err)
-	}
+	client := NewCalendarClient(server.URL+"/api/", "token", loc)
 
 	result, err := client.GetCalendars(
 		context.Background(),
@@ -228,15 +213,12 @@ func TestCalendarClientContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewCalendarClient(server.URL+"/api/", "token", loc)
-	if err != nil {
-		t.Fatalf("Failed to create calendar client: %v", err)
-	}
+	client := NewCalendarClient(server.URL+"/api/", "token", loc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err = client.GetCalendars(
+	_, err := client.GetCalendars(
 		ctx,
 		[]string{"test"},
 		time.Now(),

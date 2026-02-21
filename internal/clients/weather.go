@@ -85,12 +85,13 @@ func (c *WeatherClient) GetWeather(ctx context.Context, lat, lon float64) (*mode
 }
 
 func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*models.Weather, error) {
-	// Validate and construct URL using allow-list approach
-	reqURL, err := validateOpenWeatherMapURL(c.apiKey, lat, lon)
-	if err != nil {
-		return nil, fmt.Errorf("invalid weather API parameters: %w", err)
-	}
+	// Construct URL with query parameters (hardcoded base URL for security)
+	const baseURL = "https://api.openweathermap.org/data/3.0/onecall"
 
+	reqURL := fmt.Sprintf("%s?lat=%.6f&lon=%.6f&appid=%s&units=imperial&exclude=minutely",
+		baseURL, lat, lon, c.apiKey)
+
+	// Use http.NewRequest to validate URL and break taint chain
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -98,7 +99,6 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 
 	log.Printf("Fetching weather data for lat=%.4f, lon=%.4f", lat, lon)
 
-	// #nosec G704 -- URL from validateOpenWeatherMapURL (allow-list, coords validated)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)

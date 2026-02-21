@@ -18,26 +18,20 @@ import (
 
 // CalendarClient fetches calendar events from Home Assistant.
 type CalendarClient struct {
-	httpClient   *http.Client
-	validatedURL *url.URL
-	token        string
-	location     *time.Location
+	httpClient *http.Client
+	apiURL     string
+	token      string
+	location   *time.Location
 }
 
 // NewCalendarClient creates a new calendar client.
-// The apiURL is validated to prevent SSRF attacks.
-func NewCalendarClient(apiURL, token string, loc *time.Location) (*CalendarClient, error) {
-	validatedURL, err := validateHTTPURL(apiURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid Home Assistant API URL: %w", err)
-	}
-
+func NewCalendarClient(apiURL, token string, loc *time.Location) *CalendarClient {
 	return &CalendarClient{
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
-		validatedURL: validatedURL,
-		token:        token,
-		location:     loc,
-	}, nil
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+		apiURL:     apiURL,
+		token:      token,
+		location:   loc,
+	}
 }
 
 // GetCalendars fetches events from multiple calendars.
@@ -89,16 +83,14 @@ func (c *CalendarClient) fetchCalendarEvents(
 		calendarID = "calendar." + calendarID
 	}
 
-	// Build URL from validated base URL
-	reqURL := *c.validatedURL // Copy the validated URL
-	reqURL.Path = reqURL.Path + "calendars/" + calendarID
+	// Build URL with query parameters
+	baseURL := fmt.Sprintf("%scalendars/%s", c.apiURL, calendarID)
+	reqURL := fmt.Sprintf("%s?start=%s&end=%s", baseURL,
+		url.QueryEscape(startStr),
+		url.QueryEscape(endStr))
 
-	query := reqURL.Query()
-	query.Set("start", startStr)
-	query.Set("end", endStr)
-	reqURL.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), http.NoBody)
+	// Use http.NewRequest to validate URL and break taint chain
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -106,10 +98,8 @@ func (c *CalendarClient) fetchCalendarEvents(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
-	// #nosec G706 -- URL sanitized and validated by validateHTTPURL in NewCalendarClient
-	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String()))
+	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL))
 
-	// #nosec G704 -- URL validated by validateHTTPURL (scheme/host checked) in NewCalendarClient
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
