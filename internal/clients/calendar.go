@@ -100,6 +100,7 @@ func (c *CalendarClient) fetchCalendarEvents(
 
 	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL))
 
+	// #nosec G704 -- URL validated by http.NewRequest, comes from admin config
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)

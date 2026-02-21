@@ -99,6 +99,7 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 
 	log.Printf("Fetching weather data for lat=%.4f, lon=%.4f", lat, lon)
 
+	// #nosec G704 -- URL validated by http.NewRequest, hardcoded base URL
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
