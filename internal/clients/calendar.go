@@ -104,7 +104,6 @@ func (c *CalendarClient) fetchCalendarEvents(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
-	// URL is from trusted config, not user input
 	log.Printf("Fetching calendar events from: %s", reqURL.String())
 
 	resp, err := c.httpClient.Do(req)
