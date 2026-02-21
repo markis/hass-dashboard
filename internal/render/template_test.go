@@ -541,6 +541,140 @@ func TestHTMLTemplateFunctions(t *testing.T) {
 	})
 }
 
+func TestFilterPastEvents(t *testing.T) {
+	loc, _ := time.LoadLocation("UTC")
+	now := time.Date(2024, 1, 15, 14, 0, 0, 0, loc) // 2 PM on Jan 15
+
+	date1 := time.Date(2024, 1, 15, 0, 0, 0, 0, loc) // Today
+	date2 := time.Date(2024, 1, 16, 0, 0, 0, 0, loc) // Tomorrow
+	date3 := time.Date(2024, 1, 14, 0, 0, 0, 0, loc) // Yesterday
+
+	tests := []struct {
+		name       string
+		events     map[time.Time][]models.Event
+		now        time.Time
+		wantDates  []time.Time
+		wantCounts map[time.Time]int
+	}{
+		{
+			name: "filters out ended events",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Past Event", Start: now.Add(-2 * time.Hour), End: now.Add(-1 * time.Hour)}, // Ended 1 hour ago
+					{Name: "Future Event", Start: now.Add(1 * time.Hour), End: now.Add(2 * time.Hour)}, // Starts in 1 hour
+				},
+			},
+			now:       now,
+			wantDates: []time.Time{date1},
+			wantCounts: map[time.Time]int{
+				date1: 1, // Only future event
+			},
+		},
+		{
+			name: "keeps ongoing events",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Ongoing Event", Start: now.Add(-30 * time.Minute), End: now.Add(30 * time.Minute)}, // Still going
+				},
+			},
+			now:       now,
+			wantDates: []time.Time{date1},
+			wantCounts: map[time.Time]int{
+				date1: 1,
+			},
+		},
+		{
+			name: "removes dates with only past events",
+			events: map[time.Time][]models.Event{
+				date3: {
+					{Name: "Yesterday Event", Start: now.Add(-25 * time.Hour), End: now.Add(-24 * time.Hour)},
+				},
+				date1: {
+					{Name: "Future Event", Start: now.Add(1 * time.Hour), End: now.Add(2 * time.Hour)},
+				},
+			},
+			now:       now,
+			wantDates: []time.Time{date1},
+			wantCounts: map[time.Time]int{
+				date1: 1,
+			},
+		},
+		{
+			name: "handles all-day events correctly",
+			events: map[time.Time][]models.Event{
+				date1: {
+					// All-day event ending at midnight (start of next day)
+					{Name: "All Day Today", Start: date1, End: date2, AllDay: true},
+				},
+			},
+			now:       now,
+			wantDates: []time.Time{date1},
+			wantCounts: map[time.Time]int{
+				date1: 1, // Should keep it since it ends at midnight (future)
+			},
+		},
+		{
+			name: "handles multiple dates with mixed events",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Past 1", Start: now.Add(-2 * time.Hour), End: now.Add(-1 * time.Hour)},
+					{Name: "Future 1", Start: now.Add(1 * time.Hour), End: now.Add(2 * time.Hour)},
+					{Name: "Future 2", Start: now.Add(3 * time.Hour), End: now.Add(4 * time.Hour)},
+				},
+				date2: {
+					{Name: "Tomorrow", Start: now.Add(24 * time.Hour), End: now.Add(25 * time.Hour)},
+				},
+			},
+			now:       now,
+			wantDates: []time.Time{date1, date2},
+			wantCounts: map[time.Time]int{
+				date1: 2, // 2 future events
+				date2: 1,
+			},
+		},
+		{
+			name:       "empty events",
+			events:     map[time.Time][]models.Event{},
+			now:        now,
+			wantDates:  []time.Time{},
+			wantCounts: map[time.Time]int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FilterPastEvents(tt.events, tt.now)
+
+			// Check number of dates
+			if len(result) != len(tt.wantDates) {
+				t.Errorf("FilterPastEvents() returned %d dates, want %d", len(result), len(tt.wantDates))
+			}
+
+			// Check event counts for each date
+			for date, wantCount := range tt.wantCounts {
+				gotEvents, exists := result[date]
+				if !exists {
+					t.Errorf("FilterPastEvents() missing date %v", date)
+					continue
+				}
+				if len(gotEvents) != wantCount {
+					t.Errorf("FilterPastEvents() date %v has %d events, want %d", date, len(gotEvents), wantCount)
+				}
+			}
+
+			// Verify no past events remain
+			for date, events := range result {
+				for _, event := range events {
+					if !event.End.After(tt.now) {
+						t.Errorf("FilterPastEvents() kept past event %q on %v (ended at %v, now is %v)",
+							event.Name, date, event.End, tt.now)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestBase64Encode(t *testing.T) {
 	tests := []struct {
 		name  string

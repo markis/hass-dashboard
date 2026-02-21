@@ -224,7 +224,32 @@ func base64Encode(data []byte) string {
 // HourlyForecastView is an alias for models.HourlyForecast for template rendering.
 type HourlyForecastView = models.HourlyForecast
 
+// FilterPastEvents removes events that have already ended.
+// Returns a new map with only active events (events whose end time is in the future).
+func FilterPastEvents(events map[time.Time][]models.Event, now time.Time) map[time.Time][]models.Event {
+	filtered := make(map[time.Time][]models.Event)
+
+	for date, eventsOnDate := range events {
+		activeEvents := make([]models.Event, 0)
+
+		for _, event := range eventsOnDate {
+			// Only include events that haven't ended yet
+			if event.End.After(now) {
+				activeEvents = append(activeEvents, event)
+			}
+		}
+
+		// Only include the date if there are active events
+		if len(activeEvents) > 0 {
+			filtered[date] = activeEvents
+		}
+	}
+
+	return filtered
+}
+
 // SortedEventDates returns event dates sorted chronologically.
+// It expects the events map to already be filtered by FilterPastEvents.
 func SortedEventDates(events map[time.Time][]models.Event) []time.Time {
 	dates := make([]time.Time, 0, len(events))
 

@@ -148,10 +148,13 @@ func generateDashboard(
 	}()
 
 	// Fetch calendar events
-	events, err := calendarClient.GetCalendars(ctx, config.HomeAssistant.Calendars, startDate, endDate)
+	allEvents, err := calendarClient.GetCalendars(ctx, config.HomeAssistant.Calendars, startDate, endDate)
 	if err != nil {
 		return err
 	}
+
+	// Filter out events that have already ended
+	activeEvents := render.FilterPastEvents(allEvents, now)
 
 	// Wait for weather
 	weatherResult := <-weatherChan
@@ -168,8 +171,8 @@ func generateDashboard(
 		hourly = append(hourly, weather.Hourly[i])
 	}
 
-	// Generate dates with event counts
-	datesWithEvents := render.GenerateDatesWithEvents(dates, events, now)
+	// Generate dates with event counts (using active events only)
+	datesWithEvents := render.GenerateDatesWithEvents(dates, activeEvents, now)
 
 	// Draw hourly forecast SVG
 	hourlySVG := render.DrawWeatherForecast(weather.Hourly, 400, 40, 5)
@@ -179,8 +182,8 @@ func generateDashboard(
 		Weather:         weather,
 		Hourly:          hourly,
 		DatesWithEvents: datesWithEvents,
-		Events:          events,
-		SortedDates:     render.SortedEventDates(events),
+		Events:          activeEvents,
+		SortedDates:     render.SortedEventDates(activeEvents),
 		HourlySVG:       hourlySVG,
 	}
 
