@@ -18,20 +18,26 @@ import (
 
 // CalendarClient fetches calendar events from Home Assistant.
 type CalendarClient struct {
-	httpClient *http.Client
-	apiURL     string
-	token      string
-	location   *time.Location
+	httpClient   *http.Client
+	validatedURL *url.URL
+	token        string
+	location     *time.Location
 }
 
 // NewCalendarClient creates a new calendar client.
-func NewCalendarClient(apiURL, token string, loc *time.Location) *CalendarClient {
-	return &CalendarClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		apiURL:     apiURL,
-		token:      token,
-		location:   loc,
+// The apiURL is validated to prevent SSRF attacks.
+func NewCalendarClient(apiURL, token string, loc *time.Location) (*CalendarClient, error) {
+	validatedURL, err := validateHTTPURL(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Home Assistant API URL: %w", err)
 	}
+
+	return &CalendarClient{
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		validatedURL: validatedURL,
+		token:        token,
+		location:     loc,
+	}, nil
 }
 
 // GetCalendars fetches events from multiple calendars.
@@ -83,13 +89,9 @@ func (c *CalendarClient) fetchCalendarEvents(
 		calendarID = "calendar." + calendarID
 	}
 
-	// Build URL with properly encoded query parameters
-	baseURL := fmt.Sprintf("%scalendars/%s", c.apiURL, calendarID)
-
-	reqURL, err := url.Parse(baseURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing base URL: %w", err)
-	}
+	// Build URL from validated base URL
+	reqURL := *c.validatedURL // Copy the validated URL
+	reqURL.Path = reqURL.Path + "calendars/" + calendarID
 
 	query := reqURL.Query()
 	query.Set("start", startStr)
@@ -104,9 +106,9 @@ func (c *CalendarClient) fetchCalendarEvents(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String())) // #nosec G706 -- URL is sanitized
+	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String()))
 
-	resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config file
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}

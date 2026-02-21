@@ -7,14 +7,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
 	"github.com/markis/hass-dashboard/internal/models"
 )
-
-const openWeatherBaseURL = "https://api.openweathermap.org/data/3.0/onecall"
 
 // WeatherClient fetches weather data from OpenWeatherMap.
 type WeatherClient struct {
@@ -88,14 +85,11 @@ func (c *WeatherClient) GetWeather(ctx context.Context, lat, lon float64) (*mode
 }
 
 func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*models.Weather, error) {
-	params := url.Values{}
-	params.Set("lat", fmt.Sprintf("%.6f", lat))
-	params.Set("lon", fmt.Sprintf("%.6f", lon))
-	params.Set("appid", c.apiKey)
-	params.Set("units", "imperial")
-	params.Set("exclude", "minutely")
-
-	reqURL := openWeatherBaseURL + "?" + params.Encode()
+	// Validate and construct URL using allow-list approach
+	reqURL, err := validateOpenWeatherMapURL(c.apiKey, lat, lon)
+	if err != nil {
+		return nil, fmt.Errorf("invalid weather API parameters: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
 	if err != nil {
@@ -104,7 +98,7 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 
 	log.Printf("Fetching weather data for lat=%.4f, lon=%.4f", lat, lon)
 
-	resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config file
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}

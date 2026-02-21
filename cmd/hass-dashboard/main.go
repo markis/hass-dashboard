@@ -63,6 +63,18 @@ func main() {
 		log.Fatalf("Invalid timezone %q: %v", config.Timezone, err)
 	}
 
+	// Create clients (before context setup to allow fatal errors)
+	calendarClient, err := clients.NewCalendarClient(
+		config.HomeAssistant.URL,
+		config.HomeAssistant.Token,
+		loc,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create calendar client: %v", err)
+	}
+
+	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
+
 	// Set up context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -76,14 +88,6 @@ func main() {
 		log.Println("Shutting down...")
 		cancel()
 	}()
-
-	// Create clients
-	calendarClient := clients.NewCalendarClient(
-		config.HomeAssistant.URL,
-		config.HomeAssistant.Token,
-		loc,
-	)
-	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
 
 	log.Println("Starting dashboard generator...")
 
