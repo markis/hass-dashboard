@@ -21,7 +21,7 @@ func TestSanitizeURL(t *testing.T) {
 			input:    "http://example.com\r\nmalicious",
 			expected: "http://example.commalicious",
 		},
-		{
+		{ // #nosec G101 -- Test case for password redaction, not actual credentials
 			name:     "redacts password",
 			input:    "http://user:password@example.com",
 			expected: "http://user:%5BREDACTED%5D@example.com",

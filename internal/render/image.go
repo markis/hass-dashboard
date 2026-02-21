@@ -137,7 +137,7 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 		//nolint:errcheck // Best effort cleanup
 		_ = tempFile.Close()
 		//nolint:errcheck // Best effort cleanup
-		_ = os.Remove(tempPath)
+		_ = os.Remove(tempPath) // #nosec G703 -- tempPath from os.CreateTemp, not user input
 
 		return fmt.Errorf("writing temp file: %w", err)
 	}
@@ -148,14 +148,14 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	//nolint:gosec // 644 permissions required for external access
 	if err := os.Chmod(tempPath, 0o644); err != nil {
 		//nolint:errcheck // Best effort cleanup
-		_ = os.Remove(tempPath)
+		_ = os.Remove(tempPath) // #nosec G703 -- tempPath from os.CreateTemp, not user input
 
 		return fmt.Errorf("setting file permissions: %w", err)
 	}
 
-	if err := os.Rename(tempPath, config.OutputPath); err != nil {
+	if err := os.Rename(tempPath, config.OutputPath); err != nil { // #nosec G703 -- Path validated by validateOutputPath
 		//nolint:errcheck // Best effort cleanup
-		_ = os.Remove(tempPath)
+		_ = os.Remove(tempPath) // #nosec G703 -- tempPath from os.CreateTemp, not user input
 
 		return fmt.Errorf("renaming temp file: %w", err)
 	}

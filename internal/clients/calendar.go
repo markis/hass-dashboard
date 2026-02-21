@@ -104,9 +104,9 @@ func (c *CalendarClient) fetchCalendarEvents(
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String()))
+	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL.String())) // #nosec G706 -- URL is sanitized
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config file
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
@@ -115,6 +115,7 @@ func (c *CalendarClient) fetchCalendarEvents(
 	if resp.StatusCode != http.StatusOK {
 		//nolint:errcheck // Best effort for error logging
 		body, _ := io.ReadAll(resp.Body)
+		// #nosec G706 -- Response is sanitized
 		log.Printf("Calendar API error (status %d): %s", resp.StatusCode, sanitizeLogData(string(body)))
 
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)

@@ -104,7 +104,7 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 
 	log.Printf("Fetching weather data for lat=%.4f, lon=%.4f", lat, lon)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config file
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
@@ -113,6 +113,7 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 	if resp.StatusCode != http.StatusOK {
 		//nolint:errcheck // Best effort for error logging
 		body, _ := io.ReadAll(resp.Body)
+		// #nosec G706 -- Response is sanitized
 		log.Printf("Weather API error (status %d): %s", resp.StatusCode, sanitizeLogData(string(body)))
 
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
