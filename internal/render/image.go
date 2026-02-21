@@ -54,8 +54,25 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	if err := validateOutputPath(config.OutputPath); err != nil {
 		return err
 	}
-	// Create a full HTML document with preload hints for critical resources
-	fullHTML := fmt.Sprintf(`<!DOCTYPE html>
+
+	fullHTML := buildFullHTML(html, css)
+
+	buf, err := renderHTMLToImage(ctx, fullHTML, config)
+	if err != nil {
+		return err
+	}
+
+	// Rotate if needed
+	if config.Rotate != 0 {
+		buf = rotateImage(buf)
+	}
+
+	return writeImageFile(buf, config.OutputPath)
+}
+
+// buildFullHTML creates a complete HTML document with preload hints.
+func buildFullHTML(html, css string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -69,9 +86,54 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 %s
 </body>
 </html>`, css, html)
+}
 
-	// Set up chromedp options - use new headless mode to avoid crashpad issues
-	opts := []chromedp.ExecAllocatorOption{
+// renderHTMLToImage renders HTML to a screenshot using Chrome.
+func renderHTMLToImage(ctx context.Context, fullHTML string, config ImageConfig) ([]byte, error) {
+	opts := getChromeOptions(config)
+
+	log.Printf("Starting Chrome with user data dir: /tmp/chrome-data")
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
+	defer allocCancel()
+
+	taskCtx, taskCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
+	defer taskCancel()
+
+	// Set timeout
+	taskCtx, cancel := context.WithTimeout(taskCtx, 30*time.Second)
+	defer cancel()
+
+	var buf []byte
+
+	// Set defaults for font loading if not configured
+	fontTimeout := config.FontLoadTimeout
+	if fontTimeout == 0 {
+		fontTimeout = 5 * time.Second
+	}
+
+	maxRetries := config.FontLoadMaxRetries
+	if maxRetries == 0 {
+		maxRetries = 5
+	}
+
+	if err := chromedp.Run(taskCtx,
+		chromedp.Navigate("about:blank"),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.Evaluate(`document.write(`+jsonString(fullHTML)+`); document.close();`, nil).Do(ctx)
+		}),
+		waitForFontsToLoad(fontTimeout, maxRetries),
+		chromedp.FullScreenshot(&buf, 100),
+	); err != nil {
+		return nil, fmt.Errorf("taking screenshot: %w", err)
+	}
+
+	return buf, nil
+}
+
+// getChromeOptions returns Chrome options for headless rendering.
+func getChromeOptions(config ImageConfig) []chromedp.ExecAllocatorOption {
+	return []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,
 		chromedp.Flag("headless", "new"),
@@ -97,49 +159,11 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 		chromedp.UserDataDir("/tmp/chrome-data"),
 		chromedp.WindowSize(config.Width, config.Height),
 	}
+}
 
-	log.Printf("Starting Chrome with user data dir: /tmp/chrome-data")
-
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
-	defer allocCancel()
-
-	taskCtx, taskCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
-	defer taskCancel()
-
-	// Set timeout
-	taskCtx, cancel := context.WithTimeout(taskCtx, 30*time.Second)
-	defer cancel()
-
-	var buf []byte
-
-	// Set defaults for font loading if not configured
-	fontTimeout := config.FontLoadTimeout
-	if fontTimeout == 0 {
-		fontTimeout = 5 * time.Second
-	}
-	maxRetries := config.FontLoadMaxRetries
-	if maxRetries == 0 {
-		maxRetries = 5
-	}
-
-	if err := chromedp.Run(taskCtx,
-		chromedp.Navigate("about:blank"),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.Evaluate(`document.write(`+jsonString(fullHTML)+`); document.close();`, nil).Do(ctx)
-		}),
-		waitForFontsToLoad(fontTimeout, maxRetries),
-		chromedp.FullScreenshot(&buf, 100),
-	); err != nil {
-		return fmt.Errorf("taking screenshot: %w", err)
-	}
-
-	// Rotate if needed
-	if config.Rotate != 0 {
-		buf = rotateImage(buf)
-	}
-
-	// Write to temp file first, then rename for atomic write
-	dir := filepath.Dir(config.OutputPath)
+// writeImageFile writes image data to a file atomically.
+func writeImageFile(buf []byte, outputPath string) error {
+	dir := filepath.Dir(outputPath)
 
 	tempFile, err := os.CreateTemp(dir, "dashboard-*.png")
 	if err != nil {
@@ -168,7 +192,7 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 		return fmt.Errorf("setting file permissions: %w", err)
 	}
 
-	if err := os.Rename(tempPath, config.OutputPath); err != nil { // #nosec G703 -- Path validated by validateOutputPath
+	if err := os.Rename(tempPath, outputPath); err != nil { // #nosec G703 -- Path validated by validateOutputPath
 		//nolint:errcheck // Best effort cleanup
 		_ = os.Remove(tempPath) // #nosec G703 -- tempPath from os.CreateTemp, not user input
 
@@ -183,17 +207,15 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 // Also detects network errors and logs warnings.
 func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.ActionFunc {
 	return func(ctx context.Context) error {
-		baseDelay := timeout / time.Duration(maxRetries*2)
-		if baseDelay < 100*time.Millisecond {
-			baseDelay = 100 * time.Millisecond
-		}
+		baseDelay := max(timeout/time.Duration(maxRetries*2), 100*time.Millisecond)
 
 		start := time.Now()
-		for attempt := 0; attempt < maxRetries; attempt++ {
+		for attempt := range maxRetries {
 			// Check if we've exceeded timeout
 			if time.Since(start) > timeout {
 				log.Printf("Warning: Font loading timeout exceeded after %v, proceeding anyway", timeout)
 				checkAndLogNetworkErrors(ctx)
+
 				return nil
 			}
 
@@ -211,19 +233,17 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.ActionFu
 					}
 				})()
 			`, &fontsReady).Do(ctx)
-
 			if err != nil {
 				log.Printf("Warning: Failed to check font loading status (attempt %d/%d): %v", attempt+1, maxRetries, err)
 			} else if fontsReady {
 				log.Printf("Fonts loaded successfully after %d attempt(s) in %v", attempt+1, time.Since(start))
+
 				return nil
 			}
 
 			// Exponential backoff
-			delay := baseDelay * time.Duration(1<<uint(attempt))
-			if delay > timeout/2 {
-				delay = timeout / 2
-			}
+			// #nosec G115 -- attempt is bounded by maxRetries config value, overflow not possible in practice
+			delay := min(baseDelay*time.Duration(1<<uint(attempt)), timeout/2)
 
 			if attempt < maxRetries-1 {
 				log.Printf("Waiting for fonts to load, retrying in %v (attempt %d/%d)", delay, attempt+1, maxRetries)
@@ -233,6 +253,7 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.ActionFu
 
 		log.Printf("Warning: Fonts may not be fully loaded after %d retries, proceeding anyway", maxRetries)
 		checkAndLogNetworkErrors(ctx)
+
 		return nil // Don't fail, just warn
 	}
 }
@@ -253,14 +274,17 @@ func checkAndLogNetworkErrors(ctx context.Context) {
 			return failed.length > 0;
 		})()
 	`, &hasNetworkErrors).Do(ctx)
-
 	if err != nil {
 		log.Printf("Warning: Could not check for network errors: %v", err)
+
 		return
 	}
 
 	if hasNetworkErrors {
-		log.Printf("WARNING: Network errors detected - CDN resources (fonts/icons) may have failed to load. Check network connectivity.")
+		log.Printf(
+			"WARNING: Network errors detected - CDN resources (fonts/icons) may have failed to load. " +
+				"Check network connectivity.",
+		)
 	}
 }
 
