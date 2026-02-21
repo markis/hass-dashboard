@@ -8,6 +8,7 @@ A dashboard image generator for Home Assistant that displays calendar events and
 - Calendar integration with Home Assistant calendars
 - Automatic image generation at configurable intervals
 - Configurable output dimensions and rotation
+- Built-in health check for monitoring
 - Docker support for easy deployment
 
 ## Requirements
@@ -40,6 +41,12 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./output:/output
+    healthcheck:
+      test: ["/app/scripts/healthcheck.sh", "--config", "/app/config.yaml"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 ```
 
 ### From Source
@@ -114,6 +121,57 @@ refresh_interval: 600
 ```
 
 The application will generate a dashboard image immediately and then regenerate it at the configured interval. The generated PNG image can be served to e-ink displays or other devices.
+
+## Health Check
+
+The container includes a built-in health check script that monitors the output file to ensure the dashboard is generating properly.
+
+### How It Works
+
+The health check script (`scripts/healthcheck.sh`):
+- Reads `output.path` and `refresh_interval` from your config file
+- Checks if the output file exists
+- Verifies the file has been updated within `2 × refresh_interval` seconds
+- Returns exit code 0 (healthy) or 1 (unhealthy)
+
+### Manual Usage
+
+You can run the health check manually:
+
+```bash
+# From the container
+/app/scripts/healthcheck.sh --config /app/config.yaml
+
+# From the host (if you have yq installed)
+./scripts/healthcheck.sh --config config.yaml
+```
+
+**Silent on success**, outputs error messages on failure:
+```
+ERROR: Output file is stale (age: 1500s, threshold: 1200s): /output/dashboard.png
+```
+
+### Docker Health Check
+
+The health check is automatically configured in the Docker Compose file. View status:
+
+```bash
+# Check container health status
+docker ps
+
+# View health check logs
+docker inspect hass-dashboard | jq '.[0].State.Health'
+```
+
+Health check parameters:
+- **Interval**: 60 seconds between checks
+- **Timeout**: 5 seconds per check
+- **Retries**: 3 failed checks before marking unhealthy
+- **Start period**: 30 seconds grace period after container start
+
+### Requirements
+
+The health check requires `yq` (YAML processor), which is included in the Docker image.
 
 ## License
 

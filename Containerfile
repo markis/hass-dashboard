@@ -23,6 +23,7 @@ RUN apk add --no-cache \
     fontconfig \
     ca-certificates \
     tzdata \
+    yq \
     && fc-cache -f -v \
     && mkdir -p /tmp/chrome-data /tmp/chrome-crashpad && chmod 777 /tmp/chrome-data /tmp/chrome-crashpad
 
@@ -36,6 +37,7 @@ ENV CHROME_NO_FIRST_RUN=1
 
 WORKDIR /app
 
+COPY scripts/healthcheck.sh /app/scripts/healthcheck.sh
 COPY --from=builder /hass-dashboard /app/hass-dashboard
 
 USER 65534:65534
