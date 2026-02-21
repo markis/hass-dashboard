@@ -18,10 +18,12 @@ import (
 
 // ImageConfig holds configuration for image rendering.
 type ImageConfig struct {
-	Width      int
-	Height     int
-	Rotate     int
-	OutputPath string
+	Width              int
+	Height             int
+	Rotate             int
+	OutputPath         string
+	FontLoadTimeout    time.Duration // Maximum time to wait for fonts, 0 uses default (5s)
+	FontLoadMaxRetries int           // Maximum retry attempts, 0 uses default (5)
 }
 
 // validateOutputPath ensures the output path is safe and doesn't contain path traversal attempts.
@@ -52,11 +54,14 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	if err := validateOutputPath(config.OutputPath); err != nil {
 		return err
 	}
-	// Create a full HTML document
+	// Create a full HTML document with preload hints for critical resources
 	fullHTML := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
+    <!-- Preload critical font resources for faster loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <style>%s</style>
 </head>
@@ -107,12 +112,22 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 
 	var buf []byte
 
+	// Set defaults for font loading if not configured
+	fontTimeout := config.FontLoadTimeout
+	if fontTimeout == 0 {
+		fontTimeout = 5 * time.Second
+	}
+	maxRetries := config.FontLoadMaxRetries
+	if maxRetries == 0 {
+		maxRetries = 5
+	}
+
 	if err := chromedp.Run(taskCtx,
 		chromedp.Navigate("about:blank"),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.Evaluate(`document.write(`+jsonString(fullHTML)+`); document.close();`, nil).Do(ctx)
 		}),
-		chromedp.Sleep(500*time.Millisecond), // Wait for fonts to load
+		waitForFontsToLoad(fontTimeout, maxRetries),
 		chromedp.FullScreenshot(&buf, 100),
 	); err != nil {
 		return fmt.Errorf("taking screenshot: %w", err)
@@ -161,6 +176,92 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	}
 
 	return nil
+}
+
+// waitForFontsToLoad waits for all fonts to be loaded with retry logic.
+// It checks document.fonts.ready and retries with exponential backoff.
+// Also detects network errors and logs warnings.
+func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.ActionFunc {
+	return func(ctx context.Context) error {
+		baseDelay := timeout / time.Duration(maxRetries*2)
+		if baseDelay < 100*time.Millisecond {
+			baseDelay = 100 * time.Millisecond
+		}
+
+		start := time.Now()
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			// Check if we've exceeded timeout
+			if time.Since(start) > timeout {
+				log.Printf("Warning: Font loading timeout exceeded after %v, proceeding anyway", timeout)
+				checkAndLogNetworkErrors(ctx)
+				return nil
+			}
+
+			var fontsReady bool
+
+			// Check if fonts are ready using document.fonts API
+			err := chromedp.Evaluate(`
+				(async () => {
+					try {
+						await document.fonts.ready;
+						return document.fonts.status === 'loaded';
+					} catch (e) {
+						console.error('Font loading check failed:', e);
+						return false;
+					}
+				})()
+			`, &fontsReady).Do(ctx)
+
+			if err != nil {
+				log.Printf("Warning: Failed to check font loading status (attempt %d/%d): %v", attempt+1, maxRetries, err)
+			} else if fontsReady {
+				log.Printf("Fonts loaded successfully after %d attempt(s) in %v", attempt+1, time.Since(start))
+				return nil
+			}
+
+			// Exponential backoff
+			delay := baseDelay * time.Duration(1<<uint(attempt))
+			if delay > timeout/2 {
+				delay = timeout / 2
+			}
+
+			if attempt < maxRetries-1 {
+				log.Printf("Waiting for fonts to load, retrying in %v (attempt %d/%d)", delay, attempt+1, maxRetries)
+				time.Sleep(delay)
+			}
+		}
+
+		log.Printf("Warning: Fonts may not be fully loaded after %d retries, proceeding anyway", maxRetries)
+		checkAndLogNetworkErrors(ctx)
+		return nil // Don't fail, just warn
+	}
+}
+
+// checkAndLogNetworkErrors checks for network-related errors in the console
+// and logs them as warnings to help diagnose font loading issues.
+func checkAndLogNetworkErrors(ctx context.Context) {
+	var hasNetworkErrors bool
+
+	// Check for failed resource loads
+	err := chromedp.Evaluate(`
+		(async () => {
+			const resources = performance.getEntriesByType('resource');
+			const failed = resources.filter(r => 
+				(r.name.includes('weather-icons') || r.name.includes('fonts.googleapis')) &&
+				r.transferSize === 0 && r.decodedBodySize === 0
+			);
+			return failed.length > 0;
+		})()
+	`, &hasNetworkErrors).Do(ctx)
+
+	if err != nil {
+		log.Printf("Warning: Could not check for network errors: %v", err)
+		return
+	}
+
+	if hasNetworkErrors {
+		log.Printf("WARNING: Network errors detected - CDN resources (fonts/icons) may have failed to load. Check network connectivity.")
+	}
 }
 
 // jsonString escapes a string for use in JavaScript.
