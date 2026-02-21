@@ -108,22 +108,28 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	tempPath := tempFile.Name()
 
 	if _, err := tempFile.Write(buf); err != nil {
-		_ = tempFile.Close()    //nolint:errcheck // Best effort cleanup
-		_ = os.Remove(tempPath) //nolint:errcheck // Best effort cleanup
+		//nolint:errcheck // Best effort cleanup
+		_ = tempFile.Close()
+		//nolint:errcheck // Best effort cleanup
+		_ = os.Remove(tempPath)
 
 		return fmt.Errorf("writing temp file: %w", err)
 	}
 
-	_ = tempFile.Close() //nolint:errcheck // Error not relevant after successful write
+	//nolint:errcheck // Error not relevant after successful write
+	_ = tempFile.Close()
 
-	if err := os.Chmod(tempPath, 0o644); err != nil { //nolint:gosec // 644 permissions required for external access
-		_ = os.Remove(tempPath) //nolint:errcheck // Best effort cleanup
+	//nolint:gosec // 644 permissions required for external access
+	if err := os.Chmod(tempPath, 0o644); err != nil {
+		//nolint:errcheck // Best effort cleanup
+		_ = os.Remove(tempPath)
 
 		return fmt.Errorf("setting file permissions: %w", err)
 	}
 
 	if err := os.Rename(tempPath, config.OutputPath); err != nil {
-		_ = os.Remove(tempPath) //nolint:errcheck // Best effort cleanup
+		//nolint:errcheck // Best effort cleanup
+		_ = os.Remove(tempPath)
 
 		return fmt.Errorf("renaming temp file: %w", err)
 	}

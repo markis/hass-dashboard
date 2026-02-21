@@ -111,7 +111,8 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // Best effort for error logging
+		//nolint:errcheck // Best effort for error logging
+		body, _ := io.ReadAll(resp.Body)
 		log.Printf("Weather API error (status %d): %s", resp.StatusCode, string(body))
 
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
