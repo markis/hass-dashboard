@@ -42,7 +42,7 @@ services:
       - ./config.yaml:/app/config.yaml:ro
       - ./output:/output
     healthcheck:
-      test: ["/app/scripts/healthcheck.sh", "--config", "/app/config.yaml"]
+      test: ["CMD", "/app/scripts/healthcheck.sh", "--config", "/app/config.yaml"]
       interval: 60s
       timeout: 5s
       retries: 3

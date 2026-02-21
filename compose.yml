@@ -16,7 +16,7 @@ services:
     pids_limit: 512
     shm_size: 512m
     healthcheck:
-      test: ["/app/scripts/healthcheck.sh", "--config", "/app/config.yaml"]
+      test: ["CMD", "/app/scripts/healthcheck.sh", "--config", "/app/config.yaml"]
       interval: 60s
       timeout: 5s
       retries: 3
