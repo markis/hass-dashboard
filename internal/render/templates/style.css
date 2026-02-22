@@ -37,6 +37,10 @@ section {
   white-space: "nowrap";
 }
 
+section:last-child {
+  margin-bottom: 20px;
+}
+
 h1 {
   font-size: 5.5rem;
 }
