@@ -33,6 +33,7 @@ type TemplateData struct {
 
 // GetWeatherIconsCSS returns the embedded Weather Icons CSS.
 func GetWeatherIconsCSS() template.CSS {
+	// #nosec G203 -- CSS is embedded at compile time from trusted source, not user input
 	return template.CSS(weatherIconsCSS)
 }
 
