@@ -8,3 +8,6 @@ ignore*
 /output/
 *.png
 /config.yaml
+
+static/fonts/*.woff*
+static/fonts/*.css
