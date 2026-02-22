@@ -8,6 +8,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY cmd ./cmd
 COPY internal ./internal
+COPY scripts ./scripts
+COPY static ./static
+RUN apk add --no-cache curl && \
+    ./scripts/download-weather-icons.sh && \
+    ./scripts/fonts-to-css.sh
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /hass-dashboard ./cmd/hass-dashboard
@@ -42,6 +47,7 @@ WORKDIR /app
 
 COPY scripts/healthcheck.sh /app/scripts/healthcheck.sh
 COPY --from=builder /hass-dashboard /app/hass-dashboard
+COPY --from=builder /src/static/fonts/weather-icons-embedded.css /app/static/fonts/weather-icons-embedded.css
 
 USER 65534:65534
 ENTRYPOINT ["/app/hass-dashboard", "--config", "/app/config.yaml"]
