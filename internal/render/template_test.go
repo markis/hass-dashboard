@@ -284,6 +284,7 @@ func TestHTML(t *testing.T) {
 		Events:          map[time.Time][]models.Event{},
 		SortedDates:     []time.Time{},
 		HourlySVG:       "url('test')",
+		WeatherIconsCSS: GetWeatherIconsCSS(),
 	}
 
 	html, css, err := HTML(data)
@@ -355,6 +356,7 @@ func TestHTMLWithEvents(t *testing.T) {
 		Events:          events,
 		SortedDates:     SortedEventDates(events),
 		HourlySVG:       DrawWeatherForecast(weather.Hourly, 400, 40, 5),
+		WeatherIconsCSS: GetWeatherIconsCSS(),
 	}
 
 	html, css, err := HTML(data)
@@ -416,9 +418,10 @@ func TestHTMLFormattingFunctions(t *testing.T) {
 		DatesWithEvents: []models.DateCount{
 			{Day: specificTime, Events: 1, IsToday: true, IsPast: false},
 		},
-		Events:      events,
-		SortedDates: []time.Time{todayStart},
-		HourlySVG:   "",
+		Events:          events,
+		SortedDates:     []time.Time{todayStart},
+		HourlySVG:       "",
+		WeatherIconsCSS: GetWeatherIconsCSS(),
 	}
 
 	html, _, err := HTML(data)
@@ -491,6 +494,7 @@ func TestHTMLTemplateFunctions(t *testing.T) {
 			Events:          map[time.Time][]models.Event{},
 			SortedDates:     []time.Time{},
 			HourlySVG:       "",
+			WeatherIconsCSS: GetWeatherIconsCSS(),
 		}
 
 		html, _, err := HTML(data)
@@ -527,6 +531,7 @@ func TestHTMLTemplateFunctions(t *testing.T) {
 			Events:          map[time.Time][]models.Event{},
 			SortedDates:     []time.Time{},
 			HourlySVG:       "",
+			WeatherIconsCSS: GetWeatherIconsCSS(),
 		}
 
 		html, _, err := HTML(data)
@@ -721,4 +726,41 @@ func TestBase64Encode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWeatherIconsCSSEmbedded(t *testing.T) {
+	css := GetWeatherIconsCSS()
+	cssStr := string(css)
+
+	// Test that CSS is not empty
+	if cssStr == "" {
+		t.Error("GetWeatherIconsCSS() returned empty string")
+	}
+
+	// Test that it contains font-face declarations
+	if !strings.Contains(cssStr, "@font-face") {
+		t.Error("CSS should contain @font-face declarations")
+	}
+
+	// Test that it references weathericons font
+	if !strings.Contains(cssStr, "weathericons") {
+		t.Error("CSS should reference weathericons font")
+	}
+
+	// Test that it contains weather icon classes
+	if !strings.Contains(cssStr, ".wi-") {
+		t.Error("CSS should contain weather icon style rules (.wi-)")
+	}
+
+	// Test that it contains embedded font data (base64 or data URLs)
+	if !strings.Contains(cssStr, "url(") {
+		t.Error("CSS should contain url() references for fonts")
+	}
+
+	// Test that CSS is substantial (embedded fonts make it large)
+	if len(cssStr) < 50000 {
+		t.Errorf("CSS length = %d bytes, expected at least 50000 (should include embedded fonts)", len(cssStr))
+	}
+
+	t.Logf("Weather Icons CSS size: %d bytes", len(cssStr))
 }
