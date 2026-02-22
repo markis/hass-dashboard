@@ -181,6 +181,7 @@ func generateDashboard(
 		Events:          activeEvents,
 		SortedDates:     render.SortedEventDates(activeEvents),
 		HourlySVG:       hourlySVG,
+		WeatherIconsCSS: render.GetWeatherIconsCSS(),
 	}
 
 	// Render HTML

@@ -17,6 +17,9 @@ var dashboardTemplate string
 //go:embed templates/style.css
 var dashboardCSS string
 
+//go:embed templates/weather-icons-embedded.css
+var weatherIconsCSS string
+
 // TemplateData holds all data needed to render the dashboard.
 type TemplateData struct {
 	Weather         *models.Weather
@@ -25,6 +28,12 @@ type TemplateData struct {
 	Events          map[time.Time][]models.Event
 	SortedDates     []time.Time
 	HourlySVG       template.CSS
+	WeatherIconsCSS template.CSS
+}
+
+// GetWeatherIconsCSS returns the embedded Weather Icons CSS.
+func GetWeatherIconsCSS() template.CSS {
+	return template.CSS(weatherIconsCSS)
 }
 
 // HTML generates the dashboard HTML from template data.
