@@ -8,7 +8,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY cmd ./cmd
 COPY internal ./internal
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /hass-dashboard ./cmd/hass-dashboard
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /hass-dashboard ./cmd/hass-dashboard
 
 
 FROM alpine:3.19 AS runtime
@@ -17,7 +19,8 @@ LABEL org.opencontainers.image.source="https://github.com/markis/hass-dashboard"
     org.opencontainers.image.description="Home Assistant Dashboard - generates dashboard images from calendar and weather data" \
     org.opencontainers.image.licenses="MIT"
 
-RUN apk add --no-cache \
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add \
     chromium \
     font-noto \
     fontconfig \
