@@ -10,7 +10,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY scripts ./scripts
 COPY static ./static
-RUN apk add --no-cache curl && \
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* && \
     ./scripts/download-weather-icons.sh && \
     ./scripts/fonts-to-css.sh
 RUN --mount=type=cache,target=/go/pkg/mod \
