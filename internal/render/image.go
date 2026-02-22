@@ -296,12 +296,12 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.ActionFu
 func checkAndLogNetworkErrors(ctx context.Context) {
 	var hasNetworkErrors bool
 
-	// Check for failed resource loads
+	// Check for failed resource loads (Font Awesome only - Weather Icons are embedded)
 	err := chromedp.Evaluate(`
 		(async () => {
 			const resources = performance.getEntriesByType('resource');
 			const failed = resources.filter(r => 
-				(r.name.includes('weather-icons') || r.name.includes('fonts.googleapis')) &&
+				r.name.includes('fonts.googleapis') &&
 				r.transferSize === 0 && r.decodedBodySize === 0
 			);
 			return failed.length > 0;
@@ -315,7 +315,7 @@ func checkAndLogNetworkErrors(ctx context.Context) {
 
 	if hasNetworkErrors {
 		log.Printf(
-			"WARNING: Network errors detected - CDN resources (fonts/icons) may have failed to load. " +
+			"WARNING: Network errors detected - Font Awesome may have failed to load. " +
 				"Check network connectivity.",
 		)
 	}
