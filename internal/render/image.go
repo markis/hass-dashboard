@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"log"
 	"os"
@@ -24,6 +25,7 @@ type ImageConfig struct {
 	OutputPath         string
 	FontLoadTimeout    time.Duration // Maximum time to wait for fonts, 0 uses default (5s)
 	FontLoadMaxRetries int           // Maximum retry attempts, 0 uses default (5)
+	JPEGQuality        int           // JPEG quality (1-100), 0 uses default (85)
 }
 
 // validateOutputPath ensures the output path is safe and doesn't contain path traversal attempts.
@@ -48,7 +50,7 @@ func validateOutputPath(path string) error {
 	return nil
 }
 
-// Image takes HTML and CSS content and renders it to a PNG image.
+// Image takes HTML and CSS content and renders it to a JPEG image.
 func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	// Validate output path to prevent path traversal
 	if err := validateOutputPath(config.OutputPath); err != nil {
@@ -62,9 +64,18 @@ func Image(ctx context.Context, html, css string, config ImageConfig) error {
 		return err
 	}
 
+	// Convert PNG screenshot to JPEG
+	buf, err = convertPNGToJPEG(buf, config.JPEGQuality)
+	if err != nil {
+		return fmt.Errorf("converting to JPEG: %w", err)
+	}
+
 	// Rotate if needed
 	if config.Rotate != 0 {
-		buf = rotateImage(buf)
+		buf, err = rotateImage(buf, config.JPEGQuality)
+		if err != nil {
+			return fmt.Errorf("rotating image: %w", err)
+		}
 	}
 
 	return writeImageFile(buf, config.OutputPath)
@@ -165,7 +176,7 @@ func getChromeOptions(config ImageConfig) []chromedp.ExecAllocatorOption {
 func writeImageFile(buf []byte, outputPath string) error {
 	dir := filepath.Dir(outputPath)
 
-	tempFile, err := os.CreateTemp(dir, "dashboard-*.png")
+	tempFile, err := os.CreateTemp(dir, "dashboard-*.jpg")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
@@ -200,6 +211,28 @@ func writeImageFile(buf []byte, outputPath string) error {
 	}
 
 	return nil
+}
+
+// convertPNGToJPEG converts PNG data to JPEG format.
+func convertPNGToJPEG(pngData []byte, quality int) ([]byte, error) {
+	// Set default quality
+	if quality == 0 {
+		quality = 85
+	}
+
+	// Decode PNG
+	img, err := png.Decode(bytes.NewReader(pngData))
+	if err != nil {
+		return nil, fmt.Errorf("decoding PNG: %w", err)
+	}
+
+	// Encode as JPEG
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, fmt.Errorf("encoding JPEG: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // waitForFontsToLoad waits for all fonts to be loaded with retry logic.
@@ -312,12 +345,17 @@ func jsonString(s string) string {
 	return builder.String()
 }
 
-// rotateImage rotates a PNG image by 270 degrees clockwise.
-func rotateImage(data []byte) []byte {
-	// Decode the PNG image
-	src, err := png.Decode(bytes.NewReader(data))
+// rotateImage rotates a JPEG image by 270 degrees clockwise.
+func rotateImage(data []byte, quality int) ([]byte, error) {
+	// Set default quality
+	if quality == 0 {
+		quality = 85
+	}
+
+	// Decode the JPEG image
+	src, err := jpeg.Decode(bytes.NewReader(data))
 	if err != nil {
-		return data // Return original on error
+		return nil, fmt.Errorf("decoding JPEG: %w", err)
 	}
 
 	bounds := src.Bounds()
@@ -336,11 +374,11 @@ func rotateImage(data []byte) []byte {
 		}
 	}
 
-	// Encode back to PNG
+	// Encode back to JPEG
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, dst); err != nil {
-		return data // Return original on error
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, fmt.Errorf("encoding JPEG: %w", err)
 	}
 
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }

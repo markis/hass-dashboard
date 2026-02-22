@@ -40,8 +40,8 @@ openweathermap:
 		t.Errorf("RefreshInterval = %d, want 600", config.RefreshInterval)
 	}
 
-	if config.Output.Path != "output.png" {
-		t.Errorf("Output.Path = %q, want %q", config.Output.Path, "output.png")
+	if config.Output.Path != "output.jpg" {
+		t.Errorf("Output.Path = %q, want %q", config.Output.Path, "output.jpg")
 	}
 
 	if config.Output.Width != 820 {
@@ -71,7 +71,7 @@ openweathermap:
   latitude: 51.5074
   longitude: -0.1278
 output:
-  path: "/data/dashboard.png"
+  path: "/data/dashboard.jpg"
   width: 1024
   height: 768
   rotate: 0
@@ -117,8 +117,8 @@ refresh_interval: 300
 	}
 
 	// Check Output config
-	if config.Output.Path != "/data/dashboard.png" {
-		t.Errorf("Output.Path = %q, want %q", config.Output.Path, "/data/dashboard.png")
+	if config.Output.Path != "/data/dashboard.jpg" {
+		t.Errorf("Output.Path = %q, want %q", config.Output.Path, "/data/dashboard.jpg")
 	}
 
 	if config.Output.Width != 1024 {
@@ -225,8 +225,8 @@ output:
 		t.Errorf("Output.Height = %d, want 1200 (default)", config.Output.Height)
 	}
 
-	if config.Output.Path != "output.png" {
-		t.Errorf("Output.Path = %q, want %q (default)", config.Output.Path, "output.png")
+	if config.Output.Path != "output.jpg" {
+		t.Errorf("Output.Path = %q, want %q (default)", config.Output.Path, "output.jpg")
 	}
 
 	if config.Timezone != "America/New_York" {

@@ -22,7 +22,7 @@ openweathermap:
 
 output:
   # Path to save the generated dashboard image
-  path: "output.png"
+  path: "output.jpg"
   # Image dimensions in pixels
   width: 820
   height: 1200

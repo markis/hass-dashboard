@@ -211,7 +211,7 @@ func loadConfig(path string) (*Config, error) {
 		Timezone:        "America/New_York",
 		RefreshInterval: 600,
 		Output: OutputConfig{
-			Path:   "output.png",
+			Path:   "output.jpg",
 			Width:  820,
 			Height: 1200,
 			Rotate: 270,
