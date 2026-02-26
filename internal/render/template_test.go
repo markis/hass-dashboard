@@ -779,6 +779,11 @@ func TestCSSLayoutContainsFlexBody(t *testing.T) {
 	if !strings.Contains(css, "flex: 1") {
 		t.Error("css .events should use flex: 1")
 	}
+
+	// sections must not have a max-width cap — they should fill the full viewport width
+	if strings.Contains(css, "max-width: 780px") {
+		t.Error("css section should not have max-width: 780px; panels should be full width")
+	}
 }
 
 func TestWeatherIconsCSSEmbedded(t *testing.T) {

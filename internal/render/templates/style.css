@@ -28,8 +28,7 @@ ul {
 }
 
 section {
-  max-width: 780px;
-  margin: 20px auto;
+  margin: 20px;
   background-color: #ffffff;
   border: solid 3px black;
   border-radius: 8px;
