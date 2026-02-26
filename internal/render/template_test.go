@@ -728,6 +728,57 @@ func TestBase64Encode(t *testing.T) {
 	}
 }
 
+func TestCSSLayoutContainsFlexBody(t *testing.T) {
+	_, css, err := HTML(&TemplateData{
+		Weather: &models.Weather{
+			Forecasts: []models.Forecast{},
+			Hourly:    []models.HourlyForecast{},
+		},
+		DatesWithEvents: []models.DateCount{},
+		Events:          map[time.Time][]models.Event{},
+		SortedDates:     []time.Time{},
+		HourlySVG:       "",
+		WeatherIconsCSS: GetWeatherIconsCSS(),
+	})
+	if err != nil {
+		t.Fatalf("HTML() error: %v", err)
+	}
+
+	// body must be a flex column so sections stack vertically within the viewport
+	if !strings.Contains(css, "display: flex") {
+		t.Error("css body should use display: flex")
+	}
+	if !strings.Contains(css, "flex-direction: column") {
+		t.Error("css body should use flex-direction: column")
+	}
+
+	// body height must be 100vh (viewport height), not 100vw (viewport width)
+	if strings.Contains(css, "height: 100vw") {
+		t.Error("css body should not use height: 100vw; should use height: 100vh")
+	}
+	if !strings.Contains(css, "height: 100vh") {
+		t.Error("css body should use height: 100vh")
+	}
+
+	// overflow must be hidden (not the invalid 'none')
+	if strings.Contains(css, "overflow: none") {
+		t.Error("css body should not use overflow: none (invalid value)")
+	}
+	if !strings.Contains(css, "overflow: hidden") {
+		t.Error("css body should use overflow: hidden")
+	}
+
+	// events section must not have a fixed vw-based height
+	if strings.Contains(css, "height: 70vw") {
+		t.Error("css .events should not use fixed height: 70vw")
+	}
+
+	// events section must use flex: 1 to fill remaining space
+	if !strings.Contains(css, "flex: 1") {
+		t.Error("css .events should use flex: 1")
+	}
+}
+
 func TestWeatherIconsCSSEmbedded(t *testing.T) {
 	css := GetWeatherIconsCSS()
 	cssStr := string(css)
