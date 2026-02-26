@@ -784,6 +784,11 @@ func TestCSSLayoutContainsFlexBody(t *testing.T) {
 	if strings.Contains(css, "max-width: 780px") {
 		t.Error("css section should not have max-width: 780px; panels should be full width")
 	}
+
+	// sections must not use auto horizontal margin — that would re-center them and prevent full width
+	if strings.Contains(css, "margin: 20px auto") {
+		t.Error("css section should not use margin: 20px auto; auto centering prevents full-width panels")
+	}
 }
 
 func TestWeatherIconsCSSEmbedded(t *testing.T) {
