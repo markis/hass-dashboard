@@ -152,8 +152,7 @@ h5 {
 
 .events {
   flex: 1;
-  overflow: hidden;
-  min-height: 0;
+  min-height: 10rem;
 }
 .events_list {
   padding: 1rem;

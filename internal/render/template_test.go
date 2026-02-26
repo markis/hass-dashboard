@@ -760,12 +760,14 @@ func TestCSSLayoutContainsFlexBody(t *testing.T) {
 		t.Error("css body should use height: 100vh")
 	}
 
-	// overflow must be hidden (not the invalid 'none')
+	// overflow: none is invalid - ensure it's not used
 	if strings.Contains(css, "overflow: none") {
 		t.Error("css body should not use overflow: none (invalid value)")
 	}
-	if !strings.Contains(css, "overflow: hidden") {
-		t.Error("css body should use overflow: hidden")
+
+	// events section must have a minimum height floor to prevent collapsing
+	if !strings.Contains(css, "min-height: 10rem") {
+		t.Error("css .events should have min-height floor to prevent collapsing")
 	}
 
 	// events section must not have a fixed vw-based height
