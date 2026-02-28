@@ -274,6 +274,7 @@ func DeduplicateEvents(events map[time.Time][]models.Event) map[time.Time][]mode
 			// Only add if we haven't seen this combination before
 			if !seen[key] {
 				seen[key] = true
+
 				uniqueEvents = append(uniqueEvents, event)
 			}
 		}

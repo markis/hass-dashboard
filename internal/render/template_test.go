@@ -1,6 +1,7 @@
 package render
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -992,14 +993,7 @@ func TestDeduplicateEvents(t *testing.T) {
 
 				// Check that all expected names are present
 				for _, wantName := range wantNames {
-					found := false
-					for _, gotName := range gotNames {
-						if gotName == wantName {
-							found = true
-							break
-						}
-					}
-					if !found {
+					if !slices.Contains(gotNames, wantName) {
 						t.Errorf("DeduplicateEvents() date %v missing event %q, got %v", date, wantName, gotNames)
 					}
 				}
