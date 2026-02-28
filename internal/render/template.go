@@ -258,6 +258,35 @@ func FilterPastEvents(events map[time.Time][]models.Event, now time.Time) map[ti
 	return filtered
 }
 
+// DeduplicateEvents removes duplicate events on the same day with the same start time and title.
+// Returns a new map with deduplicated events.
+func DeduplicateEvents(events map[time.Time][]models.Event) map[time.Time][]models.Event {
+	deduplicated := make(map[time.Time][]models.Event)
+
+	for date, eventsOnDate := range events {
+		seen := make(map[string]bool)
+		uniqueEvents := make([]models.Event, 0, len(eventsOnDate))
+
+		for _, event := range eventsOnDate {
+			// Create a key from start time and title
+			key := fmt.Sprintf("%s|%s", event.Start.Format(time.RFC3339), event.Name)
+
+			// Only add if we haven't seen this combination before
+			if !seen[key] {
+				seen[key] = true
+				uniqueEvents = append(uniqueEvents, event)
+			}
+		}
+
+		// Only include the date if there are events
+		if len(uniqueEvents) > 0 {
+			deduplicated[date] = uniqueEvents
+		}
+	}
+
+	return deduplicated
+}
+
 // SortedEventDates returns event dates sorted chronologically.
 // It expects the events map to already be filtered by FilterPastEvents.
 func SortedEventDates(events map[time.Time][]models.Event) []time.Time {

@@ -152,6 +152,9 @@ func generateDashboard(
 	// Filter out events that have already ended
 	activeEvents := render.FilterPastEvents(allEvents, now)
 
+	// Deduplicate events on the same day with the same time and title
+	activeEvents = render.DeduplicateEvents(activeEvents)
+
 	// Wait for weather
 	weatherResult := <-weatherChan
 	if weatherResult.err != nil {

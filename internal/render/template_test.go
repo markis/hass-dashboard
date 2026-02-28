@@ -827,3 +827,190 @@ func TestWeatherIconsCSSEmbedded(t *testing.T) {
 
 	t.Logf("Weather Icons CSS size: %d bytes", len(cssStr))
 }
+
+func TestDeduplicateEvents(t *testing.T) {
+	loc, _ := time.LoadLocation("UTC")
+
+	date1 := time.Date(2024, 1, 15, 0, 0, 0, 0, loc) // Monday
+	date2 := time.Date(2024, 1, 16, 0, 0, 0, 0, loc) // Tuesday
+
+	// Different event times on same day
+	time1 := time.Date(2024, 1, 15, 10, 0, 0, 0, loc) // 10:00 AM
+	time2 := time.Date(2024, 1, 15, 14, 0, 0, 0, loc) // 2:00 PM
+	time3 := time.Date(2024, 1, 16, 10, 0, 0, 0, loc) // Next day 10:00 AM
+
+	tests := []struct {
+		name       string
+		events     map[time.Time][]models.Event
+		wantCounts map[time.Time]int
+		wantNames  map[time.Time][]string
+	}{
+		{
+			name: "removes duplicate events with same time and title",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Meeting", Start: time1, End: time1.Add(1 * time.Hour)},
+					{Name: "Meeting", Start: time1, End: time1.Add(1 * time.Hour)}, // Duplicate
+					{Name: "Lunch", Start: time2, End: time2.Add(1 * time.Hour)},
+				},
+			},
+			wantCounts: map[time.Time]int{
+				date1: 2, // Should only have 2 events (Meeting and Lunch)
+			},
+			wantNames: map[time.Time][]string{
+				date1: {"Meeting", "Lunch"},
+			},
+		},
+		{
+			name: "keeps events with same title but different times",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Meeting", Start: time1, End: time1.Add(1 * time.Hour)}, // 10 AM
+					{Name: "Meeting", Start: time2, End: time2.Add(1 * time.Hour)}, // 2 PM
+				},
+			},
+			wantCounts: map[time.Time]int{
+				date1: 2, // Both should be kept (different times)
+			},
+			wantNames: map[time.Time][]string{
+				date1: {"Meeting", "Meeting"},
+			},
+		},
+		{
+			name: "keeps events with same time but different titles",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Meeting", Start: time1, End: time1.Add(1 * time.Hour)},
+					{Name: "Standup", Start: time1, End: time1.Add(30 * time.Minute)},
+				},
+			},
+			wantCounts: map[time.Time]int{
+				date1: 2, // Both should be kept (different titles)
+			},
+			wantNames: map[time.Time][]string{
+				date1: {"Meeting", "Standup"},
+			},
+		},
+		{
+			name: "handles multiple duplicates",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Team Sync", Start: time1, End: time1.Add(1 * time.Hour)},
+					{Name: "Team Sync", Start: time1, End: time1.Add(1 * time.Hour)}, // Duplicate 1
+					{Name: "Team Sync", Start: time1, End: time1.Add(1 * time.Hour)}, // Duplicate 2
+					{Name: "Review", Start: time2, End: time2.Add(1 * time.Hour)},
+				},
+			},
+			wantCounts: map[time.Time]int{
+				date1: 2, // Team Sync (once) + Review
+			},
+			wantNames: map[time.Time][]string{
+				date1: {"Team Sync", "Review"},
+			},
+		},
+		{
+			name: "handles events across multiple dates",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Daily Standup", Start: time1, End: time1.Add(30 * time.Minute)},
+					{Name: "Daily Standup", Start: time1, End: time1.Add(30 * time.Minute)}, // Duplicate
+				},
+				date2: {
+					{Name: "Daily Standup", Start: time3, End: time3.Add(30 * time.Minute)},
+					{Name: "Daily Standup", Start: time3, End: time3.Add(30 * time.Minute)}, // Duplicate on different day
+				},
+			},
+			wantCounts: map[time.Time]int{
+				date1: 1, // One standup on day 1
+				date2: 1, // One standup on day 2
+			},
+			wantNames: map[time.Time][]string{
+				date1: {"Daily Standup"},
+				date2: {"Daily Standup"},
+			},
+		},
+		{
+			name: "handles empty events",
+			events: map[time.Time][]models.Event{
+				date1: {},
+			},
+			wantCounts: map[time.Time]int{},
+			wantNames:  map[time.Time][]string{},
+		},
+		{
+			name:       "handles empty map",
+			events:     map[time.Time][]models.Event{},
+			wantCounts: map[time.Time]int{},
+			wantNames:  map[time.Time][]string{},
+		},
+		{
+			name: "keeps all unique events",
+			events: map[time.Time][]models.Event{
+				date1: {
+					{Name: "Event A", Start: time1, End: time1.Add(1 * time.Hour)},
+					{Name: "Event B", Start: time1.Add(1 * time.Hour), End: time1.Add(2 * time.Hour)},
+					{Name: "Event C", Start: time2, End: time2.Add(1 * time.Hour)},
+				},
+			},
+			wantCounts: map[time.Time]int{
+				date1: 3, // All unique
+			},
+			wantNames: map[time.Time][]string{
+				date1: {"Event A", "Event B", "Event C"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DeduplicateEvents(tt.events)
+
+			// Check number of events for each date
+			for date, wantCount := range tt.wantCounts {
+				gotEvents, exists := result[date]
+				if !exists && wantCount > 0 {
+					t.Errorf("DeduplicateEvents() missing date %v", date)
+					continue
+				}
+				if len(gotEvents) != wantCount {
+					t.Errorf("DeduplicateEvents() date %v has %d events, want %d", date, len(gotEvents), wantCount)
+				}
+			}
+
+			// Check event names for each date
+			for date, wantNames := range tt.wantNames {
+				gotEvents := result[date]
+				if len(gotEvents) != len(wantNames) {
+					t.Errorf("DeduplicateEvents() date %v has %d events, want %d", date, len(gotEvents), len(wantNames))
+					continue
+				}
+
+				gotNames := make([]string, len(gotEvents))
+				for i, event := range gotEvents {
+					gotNames[i] = event.Name
+				}
+
+				// Check that all expected names are present
+				for _, wantName := range wantNames {
+					found := false
+					for _, gotName := range gotNames {
+						if gotName == wantName {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("DeduplicateEvents() date %v missing event %q, got %v", date, wantName, gotNames)
+					}
+				}
+			}
+
+			// Verify no dates with empty events
+			for date, events := range result {
+				if len(events) == 0 {
+					t.Errorf("DeduplicateEvents() should not include date %v with empty events", date)
+				}
+			}
+		})
+	}
+}
