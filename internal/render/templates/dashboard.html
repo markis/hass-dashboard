@@ -79,7 +79,7 @@
           <span class="time">{{ formatTime .Start }} - {{ formatTime .End }}</span>
           <span class="name">{{ .Name }}</span>
         </li>
-        {{ incrementEventCount }}
+        {{ $_ := incrementEventCount }}
         {{ end }}
         {{ end }}
       </ul>
