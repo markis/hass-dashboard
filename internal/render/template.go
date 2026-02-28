@@ -39,6 +39,9 @@ func GetWeatherIconsCSS() template.CSS {
 
 // HTML generates the dashboard HTML from template data.
 func HTML(data *TemplateData) (string, string, error) {
+	eventCount := 0
+	maxEvents := 10 // Maximum number of events to display to prevent overflow
+
 	funcMap := template.FuncMap{
 		"formatHour": func(t time.Time) string {
 			hour := t.Format("3PM")
@@ -63,6 +66,13 @@ func HTML(data *TemplateData) (string, string, error) {
 		},
 		"formatTime": func(t time.Time) string {
 			return t.Format("03:04 PM")
+		},
+		"incrementEventCount": func() int {
+			eventCount++
+			return eventCount
+		},
+		"canShowMoreEvents": func() bool {
+			return eventCount < maxEvents
 		},
 	}
 

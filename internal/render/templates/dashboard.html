@@ -68,18 +68,23 @@
     {{ range .SortedDates }}
     {{ $events := index $.Events . }}
     {{ if $events }}
+    {{ if canShowMoreEvents }}
     <li class="events_list_group">
       <span class="day">{{ formatWeekday . }}</span>
       <span class="date">{{ formatFullDate . }}</span>
       <ul>
         {{ range $events }}
+        {{ if canShowMoreEvents }}
         <li>
           <span class="time">{{ formatTime .Start }} - {{ formatTime .End }}</span>
           <span class="name">{{ .Name }}</span>
         </li>
+        {{ incrementEventCount }}
+        {{ end }}
         {{ end }}
       </ul>
     </li>
+    {{ end }}
     {{ end }}
     {{ end }}
   </ul>
