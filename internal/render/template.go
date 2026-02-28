@@ -69,6 +69,7 @@ func HTML(data *TemplateData) (string, string, error) {
 		},
 		"incrementEventCount": func() int {
 			eventCount++
+
 			return eventCount
 		},
 		"canShowMoreEvents": func() bool {
