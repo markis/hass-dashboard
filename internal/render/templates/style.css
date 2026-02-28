@@ -28,20 +28,12 @@ ul {
 }
 
 section {
-  margin: 20px;
+  margin: 0;
   background-color: #ffffff;
   border: solid 3px black;
   border-radius: 8px;
   overflow: hidden;
   white-space: "nowrap";
-}
-
-section:first-child {
-  margin-top: 0;
-}
-
-section:last-child {
-  margin-bottom: 0;
 }
 
 h1 {
