@@ -20,6 +20,7 @@ body {
   width: 100vw;
   display: flex;
   flex-direction: column;
+  padding: 20px;
   gap: 20px;
 }
 
@@ -29,8 +30,7 @@ ul {
 }
 
 section {
-  margin: 20px;
-  background-color: #ffffff;
+  margin: 0;
   border: solid 3px black;
   border-radius: 8px;
   overflow: hidden;
@@ -148,7 +148,7 @@ h5 {
 
 .events {
   flex: 1;
-  min-height: 10rem;
+  min-height: 12rem;
 }
 .events_list {
   padding: 1rem;
