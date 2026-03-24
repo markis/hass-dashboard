@@ -4,6 +4,8 @@ package render
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -51,34 +53,78 @@ func validateOutputPath(path string) error {
 }
 
 // Image takes HTML and CSS content and renders it to a JPEG image.
+// It only writes the file if the content has changed (based on SHA-256 hash).
 func Image(ctx context.Context, html, css string, config ImageConfig) error {
 	// Validate output path to prevent path traversal
 	if err := validateOutputPath(config.OutputPath); err != nil {
 		return err
 	}
 
+	buf, err := ImageBytes(ctx, html, css, config)
+	if err != nil {
+		return err
+	}
+
+	return WriteImageIfChanged(buf, config.OutputPath)
+}
+
+// ImageBytes takes HTML and CSS content and renders it to JPEG bytes.
+// This function does not write to disk, allowing callers to inspect or compare the output.
+func ImageBytes(ctx context.Context, html, css string, config ImageConfig) ([]byte, error) {
 	fullHTML := buildFullHTML(html, css)
 
 	buf, err := renderHTMLToImage(ctx, fullHTML, config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Convert PNG screenshot to JPEG
 	buf, err = convertPNGToJPEG(buf, config.JPEGQuality)
 	if err != nil {
-		return fmt.Errorf("converting to JPEG: %w", err)
+		return nil, fmt.Errorf("converting to JPEG: %w", err)
 	}
 
 	// Rotate if needed
 	if config.Rotate != 0 {
 		buf, err = rotateImage(buf, config.JPEGQuality)
 		if err != nil {
-			return fmt.Errorf("rotating image: %w", err)
+			return nil, fmt.Errorf("rotating image: %w", err)
 		}
 	}
 
-	return writeImageFile(buf, config.OutputPath)
+	return buf, nil
+}
+
+// WriteImageIfChanged writes the image data to a file only if the content differs
+// from the existing file (based on SHA-256 hash comparison).
+// Returns nil if the file was written or if it was skipped because content is identical.
+func WriteImageIfChanged(imageData []byte, outputPath string) error {
+	newHash := computeHash(imageData)
+
+	// Try to read existing file and compute its hash
+	existingData, err := os.ReadFile(outputPath) // #nosec G304 -- Path validated by validateOutputPath
+	if err == nil {
+		existingHash := computeHash(existingData)
+		if newHash == existingHash {
+			log.Printf("Image unchanged (hash: %s), skipping write", newHash[:12])
+
+			return nil
+		}
+
+		log.Printf("Image changed (old: %s, new: %s), updating file", existingHash[:12], newHash[:12])
+	} else if !os.IsNotExist(err) {
+		// Log non-NotExist errors but continue with write
+		log.Printf("Warning: Could not read existing file for comparison: %v", err)
+	}
+
+	return writeImageFile(imageData, outputPath)
+}
+
+// computeHash calculates the SHA-256 hash of the given data and returns it as a hex string.
+func computeHash(data []byte) string {
+	hash := sha256.Sum256(data)
+
+	return hex.EncodeToString(hash[:])
 }
 
 // buildFullHTML creates a complete HTML document with preload hints.

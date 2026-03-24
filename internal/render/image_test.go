@@ -5,6 +5,8 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -202,4 +204,132 @@ func TestValidateOutputPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestComputeHash(t *testing.T) {
+	t.Run("same data produces same hash", func(t *testing.T) {
+		data := []byte("test image data")
+		hash1 := computeHash(data)
+		hash2 := computeHash(data)
+
+		if hash1 != hash2 {
+			t.Errorf("computeHash produced different hashes for same data: %s vs %s", hash1, hash2)
+		}
+	})
+
+	t.Run("different data produces different hash", func(t *testing.T) {
+		data1 := []byte("test image data 1")
+		data2 := []byte("test image data 2")
+		hash1 := computeHash(data1)
+		hash2 := computeHash(data2)
+
+		if hash1 == hash2 {
+			t.Errorf("computeHash produced same hash for different data")
+		}
+	})
+
+	t.Run("hash is 64 hex characters (SHA-256)", func(t *testing.T) {
+		data := []byte("test")
+		hash := computeHash(data)
+
+		if len(hash) != 64 {
+			t.Errorf("hash length = %d, want 64", len(hash))
+		}
+	})
+
+	t.Run("empty data produces valid hash", func(t *testing.T) {
+		data := []byte{}
+		hash := computeHash(data)
+
+		if len(hash) != 64 {
+			t.Errorf("hash length for empty data = %d, want 64", len(hash))
+		}
+	})
+}
+
+func TestWriteImageIfChanged(t *testing.T) {
+	t.Run("writes new file when file does not exist", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		outputPath := filepath.Join(tmpDir, "test.jpg")
+		imageData := []byte("test image content")
+
+		err := WriteImageIfChanged(imageData, outputPath)
+		if err != nil {
+			t.Fatalf("WriteImageIfChanged failed: %v", err)
+		}
+
+		// Verify file was written
+		written, err := os.ReadFile(outputPath) // #nosec G304 -- test file in temp directory
+		if err != nil {
+			t.Fatalf("Failed to read written file: %v", err)
+		}
+
+		if !bytes.Equal(written, imageData) {
+			t.Errorf("Written data does not match input")
+		}
+	})
+
+	t.Run("skips write when content is identical", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		outputPath := filepath.Join(tmpDir, "test.jpg")
+		imageData := []byte("test image content")
+
+		// Write initial file
+		err := WriteImageIfChanged(imageData, outputPath)
+		if err != nil {
+			t.Fatalf("Initial write failed: %v", err)
+		}
+
+		// Get file modification time
+		info1, err := os.Stat(outputPath)
+		if err != nil {
+			t.Fatalf("Failed to stat file: %v", err)
+		}
+
+		// Try to write same content again
+		err = WriteImageIfChanged(imageData, outputPath)
+		if err != nil {
+			t.Fatalf("Second write failed: %v", err)
+		}
+
+		// Check that file was not modified (same mtime means no write occurred)
+		info2, err := os.Stat(outputPath)
+		if err != nil {
+			t.Fatalf("Failed to stat file after second write: %v", err)
+		}
+
+		// The mtime should be the same since we skipped the write
+		if !info1.ModTime().Equal(info2.ModTime()) {
+			t.Errorf("File was modified when content was identical (mtime changed)")
+		}
+	})
+
+	t.Run("updates file when content changes", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		outputPath := filepath.Join(tmpDir, "test.jpg")
+		imageData1 := []byte("test image content 1")
+		imageData2 := []byte("test image content 2")
+
+		// Write initial file
+		err := WriteImageIfChanged(imageData1, outputPath)
+		if err != nil {
+			t.Fatalf("Initial write failed: %v", err)
+		}
+
+		// Write different content
+		err = WriteImageIfChanged(imageData2, outputPath)
+		if err != nil {
+			t.Fatalf("Second write failed: %v", err)
+		}
+
+		// Verify new content was written
+		written, err := os.ReadFile(outputPath) // #nosec G304 -- test file in temp directory
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+
+		if !bytes.Equal(written, imageData2) {
+			t.Errorf("File was not updated with new content")
+		}
+	})
 }
