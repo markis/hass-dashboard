@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"sort"
@@ -40,51 +39,9 @@ func GetWeatherIconsCSS() template.CSS {
 	return template.CSS(weatherIconsCSS)
 }
 
-// hashableData represents template data in a JSON-serializable format.
-type hashableData struct {
-	Weather         *models.Weather           `json:"weather"`
-	Hourly          []models.HourlyForecast   `json:"hourly"`
-	DatesWithEvents []models.DateCount        `json:"datesWithEvents"`
-	Events          map[string][]models.Event `json:"events"`      // Use string keys for deterministic JSON
-	SortedDates     []string                  `json:"sortedDates"` // Use string format for times
-}
-
-// ComputeDataHash computes a SHA-256 hash of the template data for change detection.
-// This is more reliable than hashing rendered images, which may vary due to
-// Chrome rendering non-determinism (font rendering, JPEG encoding variations, etc.).
-func (td *TemplateData) ComputeDataHash() (string, error) {
-	// Create a normalized representation for hashing
-	hd := hashableData{
-		Weather:         td.Weather,
-		Hourly:          td.Hourly,
-		DatesWithEvents: td.DatesWithEvents,
-		Events:          make(map[string][]models.Event),
-		SortedDates:     make([]string, len(td.SortedDates)),
-	}
-
-	// Convert time.Time keys to strings for deterministic JSON marshaling
-	for t, events := range td.Events {
-		hd.Events[t.Format(time.RFC3339)] = events
-	}
-
-	for i, t := range td.SortedDates {
-		hd.SortedDates[i] = t.Format(time.RFC3339)
-	}
-
-	// Marshal to JSON for consistent representation
-	jsonData, err := json.Marshal(hd) //nolint:musttag // struct is properly tagged
-	if err != nil {
-		return "", fmt.Errorf("marshaling template data: %w", err)
-	}
-
-	// Compute SHA-256 hash
-	hash := sha256.Sum256(jsonData)
-
-	return hex.EncodeToString(hash[:]), nil
-}
-
 // HTML generates the dashboard HTML from template data.
-func HTML(data *TemplateData) (string, string, error) {
+// Returns html, css, hash, error where hash is a SHA-256 hash of the HTML for change detection.
+func HTML(data *TemplateData) (string, string, string, error) {
 	eventCount := 0
 	maxEvents := 10 // Maximum number of events to display to prevent overflow
 
@@ -125,16 +82,22 @@ func HTML(data *TemplateData) (string, string, error) {
 
 	tmpl, err := template.New("dashboard").Funcs(funcMap).Parse(dashboardTemplate)
 	if err != nil {
-		return "", "", fmt.Errorf("parsing template: %w", err)
+		return "", "", "", fmt.Errorf("parsing template: %w", err)
 	}
 
 	var buf bytes.Buffer
 
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", "", fmt.Errorf("executing template: %w", err)
+		return "", "", "", fmt.Errorf("executing template: %w", err)
 	}
 
-	return buf.String(), dashboardCSS, nil
+	// Compute hash of rendered HTML for change detection
+	// This is more reliable than hashing rendered images, which may vary due to
+	// Chrome rendering non-determinism (font rendering, JPEG encoding variations, etc.)
+	hash := sha256.Sum256(buf.Bytes())
+	hashStr := hex.EncodeToString(hash[:])
+
+	return buf.String(), dashboardCSS, hashStr, nil
 }
 
 // GetCalendarDates generates a range of dates starting from the beginning of the current week.
