@@ -62,11 +62,10 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 
 	// Check if data has changed before rendering
 	if config.DataHash != "" {
-		unchanged, err := checkDataUnchanged(config.OutputPath, config.DataHash)
-		if err != nil {
+		if unchanged, err := checkDataUnchanged(config.OutputPath, config.DataHash); err != nil {
 			log.Printf("Warning: Could not check hash file: %v", err)
 		} else if unchanged {
-			return nil
+			return touchHashFileAndReturn(config.OutputPath)
 		}
 	}
 
@@ -113,6 +112,26 @@ func saveDataHash(outputPath, dataHash string) error {
 	hashPath := outputPath + ".hash"
 	// #nosec G306 -- readable permissions required for hash file
 	return os.WriteFile(hashPath, []byte(dataHash), 0o644)
+}
+
+// touchHashFile updates the modification time of the hash file.
+// This is used to keep healthchecks happy when data is unchanged.
+func touchHashFile(outputPath string) error {
+	hashPath := outputPath + ".hash"
+	now := time.Now()
+
+	return os.Chtimes(hashPath, now, now)
+}
+
+// touchHashFileAndReturn touches the hash file and returns nil, or logs and returns error.
+func touchHashFileAndReturn(outputPath string) error {
+	// Touch hash file to update timestamp for healthchecks
+	// (we don't touch the image file to preserve nginx cache)
+	if err := touchHashFile(outputPath); err != nil {
+		log.Printf("Warning: Could not update hash file timestamp: %v", err)
+	}
+
+	return nil
 }
 
 // ImageBytes takes HTML and CSS content and renders it to JPEG bytes.

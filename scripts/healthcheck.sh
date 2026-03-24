@@ -57,22 +57,43 @@ if [ ! -f "$OUTPUT_PATH" ]; then
   exit 1
 fi
 
-# Get current time and file modification time (in seconds since epoch)
-CURRENT_TIME=$(date +%s)
-FILE_MOD_TIME=$(stat -c %Y "$OUTPUT_PATH" 2>/dev/null || stat -f %m "$OUTPUT_PATH" 2>/dev/null)
+# Check hash file for staleness (since v2.5.7+, we touch the hash file on each run)
+# This allows us to detect if the dashboard is running without invalidating nginx cache
+HASH_PATH="${OUTPUT_PATH}.hash"
+if [ -f "$HASH_PATH" ]; then
+  # Get current time and hash file modification time (in seconds since epoch)
+  CURRENT_TIME=$(date +%s)
+  HASH_MOD_TIME=$(stat -c %Y "$HASH_PATH" 2>/dev/null || stat -f %m "$HASH_PATH" 2>/dev/null)
 
-if [ -z "$FILE_MOD_TIME" ]; then
-  echo "ERROR: Could not get modification time for: $OUTPUT_PATH" >&2
-  exit 1
-fi
+  if [ -z "$HASH_MOD_TIME" ]; then
+    echo "ERROR: Could not get modification time for hash file: $HASH_PATH" >&2
+    exit 1
+  fi
 
-# Calculate file age
-FILE_AGE=$((CURRENT_TIME - FILE_MOD_TIME))
+  # Calculate hash file age
+  HASH_AGE=$((CURRENT_TIME - HASH_MOD_TIME))
 
-# Check if file is stale
-if [ "$FILE_AGE" -gt "$STALENESS_THRESHOLD" ]; then
-  echo "ERROR: Output file is stale (age: ${FILE_AGE}s, threshold: ${STALENESS_THRESHOLD}s): $OUTPUT_PATH" >&2
-  exit 1
+  # Check if hash file is stale (indicates dashboard is not running)
+  if [ "$HASH_AGE" -gt "$STALENESS_THRESHOLD" ]; then
+    echo "ERROR: Hash file is stale (age: ${HASH_AGE}s, threshold: ${STALENESS_THRESHOLD}s): $HASH_PATH" >&2
+    exit 1
+  fi
+else
+  # Fallback to checking output file for older versions
+  CURRENT_TIME=$(date +%s)
+  FILE_MOD_TIME=$(stat -c %Y "$OUTPUT_PATH" 2>/dev/null || stat -f %m "$OUTPUT_PATH" 2>/dev/null)
+
+  if [ -z "$FILE_MOD_TIME" ]; then
+    echo "ERROR: Could not get modification time for: $OUTPUT_PATH" >&2
+    exit 1
+  fi
+
+  FILE_AGE=$((CURRENT_TIME - FILE_MOD_TIME))
+
+  if [ "$FILE_AGE" -gt "$STALENESS_THRESHOLD" ]; then
+    echo "ERROR: Output file is stale (age: ${FILE_AGE}s, threshold: ${STALENESS_THRESHOLD}s): $OUTPUT_PATH" >&2
+    exit 1
+  fi
 fi
 
 # Success - exit silently with 0
