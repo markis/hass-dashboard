@@ -1008,3 +1008,111 @@ func TestDeduplicateEvents(t *testing.T) {
 		})
 	}
 }
+
+//nolint:gocyclo // Test function with multiple subtests is acceptable
+func TestTemplateDataComputeDataHash(t *testing.T) {
+	loc, _ := time.LoadLocation("America/New_York")
+	baseTime := time.Date(2024, 1, 15, 10, 0, 0, 0, loc)
+
+	createTestData := func() *TemplateData {
+		return &TemplateData{
+			Weather: &models.Weather{
+				Temperature:  72,
+				HighTemp:     80,
+				LowTemp:      65,
+				Condition:    "Sunny",
+				WeatherClass: "wi-day-sunny",
+			},
+			Hourly: []models.HourlyForecast{
+				{Date: baseTime, Temp: 70, Condition: "Clear", WeatherClass: "wi-day-sunny"},
+			},
+			DatesWithEvents: []models.DateCount{
+				{Day: baseTime, Events: 1, IsPast: false, IsToday: true},
+			},
+			Events: map[time.Time][]models.Event{
+				baseTime: {
+					{Name: "Test Event", Start: baseTime, End: baseTime.Add(time.Hour), AllDay: false},
+				},
+			},
+			SortedDates: []time.Time{baseTime},
+		}
+	}
+
+	t.Run("same data produces same hash", func(t *testing.T) {
+		data1 := createTestData()
+		data2 := createTestData()
+
+		hash1, err := data1.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		hash2, err := data2.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		if hash1 != hash2 {
+			t.Errorf("ComputeDataHash produced different hashes for identical data: %s vs %s", hash1, hash2)
+		}
+	})
+
+	t.Run("different weather produces different hash", func(t *testing.T) {
+		data1 := createTestData()
+		data2 := createTestData()
+		data2.Weather.Temperature = 75
+
+		hash1, err := data1.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		hash2, err := data2.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		if hash1 == hash2 {
+			t.Errorf("ComputeDataHash produced same hash for different weather data")
+		}
+	})
+
+	t.Run("different events produce different hash", func(t *testing.T) {
+		data1 := createTestData()
+		data2 := createTestData()
+		data2.Events[baseTime][0].Name = "Different Event"
+
+		hash1, err := data1.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		hash2, err := data2.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		if hash1 == hash2 {
+			t.Errorf("ComputeDataHash produced same hash for different event data")
+		}
+	})
+
+	t.Run("hash is 64 hex characters (SHA-256)", func(t *testing.T) {
+		data := createTestData()
+		hash, err := data.ComputeDataHash()
+		if err != nil {
+			t.Fatalf("ComputeDataHash failed: %v", err)
+		}
+
+		if len(hash) != 64 {
+			t.Errorf("hash length = %d, want 64", len(hash))
+		}
+
+		// Verify it's hexadecimal
+		for _, c := range hash {
+			if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+				t.Errorf("hash contains non-hex character: %c", c)
+			}
+		}
+	})
+}

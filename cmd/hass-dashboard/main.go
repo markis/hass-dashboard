@@ -187,18 +187,25 @@ func generateDashboard(
 		WeatherIconsCSS: render.GetWeatherIconsCSS(),
 	}
 
+	// Compute hash of input data for change detection
+	dataHash, err := templateData.ComputeDataHash()
+	if err != nil {
+		return fmt.Errorf("computing data hash: %w", err)
+	}
+
 	// Render HTML
 	html, css, err := render.HTML(templateData)
 	if err != nil {
 		return err
 	}
 
-	// Render to image
-	imageConfig := render.ImageConfig{
+	// Render to image with data hash for change detection
+	imageConfig := &render.ImageConfig{
 		Width:      config.Output.Width,
 		Height:     config.Output.Height,
 		Rotate:     config.Output.Rotate,
 		OutputPath: config.Output.Path,
+		DataHash:   dataHash,
 	}
 
 	return render.Image(ctx, html, css, imageConfig)

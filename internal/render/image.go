@@ -23,6 +23,7 @@ type ImageConfig struct {
 	Height             int
 	Rotate             int
 	OutputPath         string
+	DataHash           string        // SHA-256 hash of input data for change detection
 	FontLoadTimeout    time.Duration // Maximum time to wait for fonts, 0 uses default (5s)
 	FontLoadMaxRetries int           // Maximum retry attempts, 0 uses default (5)
 	JPEGQuality        int           // JPEG quality (1-100), 0 uses default (85)
@@ -51,34 +52,94 @@ func validateOutputPath(path string) error {
 }
 
 // Image takes HTML and CSS content and renders it to a JPEG image.
-func Image(ctx context.Context, html, css string, config ImageConfig) error {
+// It only writes the file if the content has changed (based on input data SHA-256 hash).
+// If config.DataHash is provided, it compares against stored hash before rendering.
+func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 	// Validate output path to prevent path traversal
 	if err := validateOutputPath(config.OutputPath); err != nil {
 		return err
 	}
 
+	// Check if data has changed before rendering
+	if config.DataHash != "" {
+		unchanged, err := checkDataUnchanged(config.OutputPath, config.DataHash)
+		if err != nil {
+			log.Printf("Warning: Could not check hash file: %v", err)
+		} else if unchanged {
+			return nil
+		}
+	}
+
+	buf, err := ImageBytes(ctx, html, css, config)
+	if err != nil {
+		return err
+	}
+
+	// Write image file
+	if err := writeImageFile(buf, config.OutputPath); err != nil {
+		return err
+	}
+
+	// Store data hash if provided
+	if config.DataHash != "" {
+		if err := saveDataHash(config.OutputPath, config.DataHash); err != nil {
+			log.Printf("Warning: Could not write hash file: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// checkDataUnchanged checks if the data hash matches the stored hash.
+func checkDataUnchanged(outputPath, dataHash string) (bool, error) {
+	hashPath := outputPath + ".hash"
+
+	existingHash, err := os.ReadFile(hashPath) // #nosec G304 -- Path validated by validateOutputPath
+	if err != nil {
+		return false, err
+	}
+
+	if string(existingHash) == dataHash {
+		log.Printf("Data unchanged (hash: %s), skipping render", dataHash[:12])
+
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// saveDataHash saves the data hash to a file.
+func saveDataHash(outputPath, dataHash string) error {
+	hashPath := outputPath + ".hash"
+	// #nosec G306 -- readable permissions required for hash file
+	return os.WriteFile(hashPath, []byte(dataHash), 0o644)
+}
+
+// ImageBytes takes HTML and CSS content and renders it to JPEG bytes.
+// This function does not write to disk, allowing callers to inspect or compare the output.
+func ImageBytes(ctx context.Context, html, css string, config *ImageConfig) ([]byte, error) {
 	fullHTML := buildFullHTML(html, css)
 
 	buf, err := renderHTMLToImage(ctx, fullHTML, config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Convert PNG screenshot to JPEG
 	buf, err = convertPNGToJPEG(buf, config.JPEGQuality)
 	if err != nil {
-		return fmt.Errorf("converting to JPEG: %w", err)
+		return nil, fmt.Errorf("converting to JPEG: %w", err)
 	}
 
 	// Rotate if needed
 	if config.Rotate != 0 {
 		buf, err = rotateImage(buf, config.JPEGQuality)
 		if err != nil {
-			return fmt.Errorf("rotating image: %w", err)
+			return nil, fmt.Errorf("rotating image: %w", err)
 		}
 	}
 
-	return writeImageFile(buf, config.OutputPath)
+	return buf, nil
 }
 
 // buildFullHTML creates a complete HTML document with preload hints.
@@ -100,7 +161,7 @@ func buildFullHTML(html, css string) string {
 }
 
 // renderHTMLToImage renders HTML to a screenshot using Chrome.
-func renderHTMLToImage(ctx context.Context, fullHTML string, config ImageConfig) ([]byte, error) {
+func renderHTMLToImage(ctx context.Context, fullHTML string, config *ImageConfig) ([]byte, error) {
 	opts := getChromeOptions(config)
 
 	log.Printf("Starting Chrome with user data dir: /tmp/chrome-data")
@@ -143,7 +204,7 @@ func renderHTMLToImage(ctx context.Context, fullHTML string, config ImageConfig)
 }
 
 // getChromeOptions returns Chrome options for headless rendering.
-func getChromeOptions(config ImageConfig) []chromedp.ExecAllocatorOption {
+func getChromeOptions(config *ImageConfig) []chromedp.ExecAllocatorOption {
 	return []chromedp.ExecAllocatorOption{
 		chromedp.NoFirstRun,
 		chromedp.NoDefaultBrowserCheck,

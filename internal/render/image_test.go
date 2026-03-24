@@ -203,3 +203,18 @@ func TestValidateOutputPath(t *testing.T) {
 		})
 	}
 }
+
+func TestImageConfigDataHash(t *testing.T) {
+	t.Run("config stores data hash", func(t *testing.T) {
+		config := ImageConfig{
+			Width:      800,
+			Height:     600,
+			OutputPath: "/tmp/test.jpg",
+			DataHash:   "abc123def456",
+		}
+
+		if config.DataHash != "abc123def456" {
+			t.Errorf("DataHash = %q, want %q", config.DataHash, "abc123def456")
+		}
+	})
+}
