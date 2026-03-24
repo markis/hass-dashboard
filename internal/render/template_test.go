@@ -767,7 +767,7 @@ func TestCSSLayoutContainsFlexBody(t *testing.T) {
 	}
 
 	// events section must have a minimum height floor to prevent collapsing
-	if !strings.Contains(css, "min-height: 10rem") {
+	if !strings.Contains(css, "min-height: 12rem") {
 		t.Error("css .events should have min-height floor to prevent collapsing")
 	}
 
