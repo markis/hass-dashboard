@@ -335,17 +335,19 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.ActionFu
 			var fontsReady bool
 
 			// Check if fonts are ready using document.fonts API
+			// Use synchronous status check - document.fonts.ready is a Promise we can't easily await here
 			err := chromedp.Evaluate(`
-				(async () => {
-					try {
-						await document.fonts.ready;
-						return document.fonts.status === 'loaded';
-					} catch (e) {
-						console.error('Font loading check failed:', e);
-						return false;
-					}
-				})()
-			`, &fontsReady).Do(ctx)
+			(() => {
+				try {
+					// Check if document.fonts.status is 'loaded'
+					// This is synchronous and doesn't require awaiting the promise
+					return document.fonts.status === 'loaded';
+				} catch (e) {
+					console.error('Font loading check failed:', e);
+					return false;
+				}
+			})()
+		`, &fontsReady).Do(ctx)
 			if err != nil {
 				log.Printf("Warning: Failed to check font loading status (attempt %d/%d): %v", attempt+1, maxRetries, err)
 			} else if fontsReady {
@@ -378,7 +380,7 @@ func checkAndLogNetworkErrors(ctx context.Context) {
 
 	// Check for failed resource loads (Font Awesome only - Weather Icons are embedded)
 	err := chromedp.Evaluate(`
-		(async () => {
+		(() => {
 			const resources = performance.getEntriesByType('resource');
 			const failed = resources.filter(r => 
 				r.name.includes('fonts.googleapis') &&

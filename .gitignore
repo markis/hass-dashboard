@@ -8,6 +8,7 @@ ignore*
 /output/
 *.png
 /config.yaml
+/hass-dashboard
 
 static/fonts/*.woff*
 static/fonts/*.css
