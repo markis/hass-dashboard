@@ -3,51 +3,74 @@ package clients
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
+	"os"
 	"sort"
-	"strings"
 	"time"
+
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/calendar/v3"
+	"google.golang.org/api/option"
 
 	"github.com/markis/hass-dashboard/internal/models"
 )
 
-// CalendarClient fetches calendar events from Home Assistant.
+// CalendarClient fetches calendar events from the Google Calendar API using a
+// service account with domain-wide delegation.
 type CalendarClient struct {
-	httpClient *http.Client
-	apiURL     string
-	token      string
-	location   *time.Location
+	service  *calendar.Service
+	location *time.Location
 }
 
-// NewCalendarClient creates a new calendar client.
-func NewCalendarClient(apiURL, token string, loc *time.Location) *CalendarClient {
-	return &CalendarClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		apiURL:     apiURL,
-		token:      token,
-		location:   loc,
+// NewCalendarClient creates a calendar client authenticated with a Google
+// service account. credentialsFile is the path to the service account key JSON.
+// impersonate is the Workspace user email to impersonate (required for
+// domain-wide delegation); leave empty only for calendars the service account
+// itself owns. The Calendar API is enabled in the Google Cloud project that
+// owns the service account, and the service account's client ID must be
+// authorized in the Workspace Admin console for the
+// https://www.googleapis.com/auth/calendar.readonly scope.
+func NewCalendarClient(
+	ctx context.Context,
+	credentialsFile, impersonate string,
+	loc *time.Location,
+) (*CalendarClient, error) {
+	keyData, err := os.ReadFile(credentialsFile) //nolint:gosec // Path from admin config
+	if err != nil {
+		return nil, fmt.Errorf("reading service account credentials %s: %w", credentialsFile, err)
 	}
+
+	jwtConfig, err := google.JWTConfigFromJSON(keyData, calendar.CalendarReadonlyScope)
+	if err != nil {
+		return nil, fmt.Errorf("parsing service account credentials: %w", err)
+	}
+
+	// Impersonate a Workspace user so the service account can read their
+	// calendars via domain-wide delegation.
+	if impersonate != "" {
+		jwtConfig.Subject = impersonate
+	}
+
+	srv, err := calendar.NewService(ctx, option.WithHTTPClient(jwtConfig.Client(ctx)))
+	if err != nil {
+		return nil, fmt.Errorf("creating calendar service: %w", err)
+	}
+
+	return &CalendarClient{service: srv, location: loc}, nil
 }
 
-// GetCalendars fetches events from multiple calendars.
+// GetCalendars fetches events from multiple Google calendars and groups them by
+// date (in the client's configured location).
 func (c *CalendarClient) GetCalendars(
 	ctx context.Context,
 	calendarIDs []string,
 	start, end time.Time,
 ) (map[time.Time][]models.Event, error) {
-	startStr := start.Format(time.RFC3339)
-	endStr := end.Format(time.RFC3339)
-
-	// Collect all events
 	allEvents := make([]models.Event, 0)
 
 	for _, calID := range calendarIDs {
-		events, err := c.fetchCalendarEvents(ctx, calID, startStr, endStr)
+		events, err := c.fetchCalendarEvents(ctx, calID, start, end)
 		if err != nil {
 			return nil, fmt.Errorf("fetching calendar %s: %w", calID, err)
 		}
@@ -55,83 +78,97 @@ func (c *CalendarClient) GetCalendars(
 		allEvents = append(allEvents, events...)
 	}
 
-	// Sort events by start time
-	sort.Slice(allEvents, func(i, j int) bool {
-		return allEvents[i].Start.Before(allEvents[j].Start)
-	})
-
-	// Group by date
-	grouped := make(map[time.Time][]models.Event)
-
-	for _, event := range allEvents {
-		date := time.Date(
-			event.Start.Year(), event.Start.Month(), event.Start.Day(),
-			0, 0, 0, 0, c.location,
-		)
-		grouped[date] = append(grouped[date], event)
-	}
-
-	return grouped, nil
+	return groupEventsByDate(allEvents, c.location), nil
 }
 
 func (c *CalendarClient) fetchCalendarEvents(
 	ctx context.Context,
-	calendarID, startStr, endStr string,
+	calendarID string,
+	start, end time.Time,
 ) ([]models.Event, error) {
-	// Ensure calendar ID has the "calendar." prefix
-	if !strings.HasPrefix(calendarID, "calendar.") {
-		calendarID = "calendar." + calendarID
-	}
+	log.Printf("Fetching calendar events from: %s", calendarID)
 
-	// Build URL with query parameters
-	baseURL := fmt.Sprintf("%scalendars/%s", c.apiURL, calendarID)
-	reqURL := fmt.Sprintf("%s?start=%s&end=%s", baseURL,
-		url.QueryEscape(startStr),
-		url.QueryEscape(endStr))
+	var events []models.Event
 
-	// Use http.NewRequest to validate URL and break taint chain
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
+	pageToken := ""
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
+	for {
+		call := c.service.Events.List(calendarID).
+			SingleEvents(true).
+			TimeMin(start.Format(time.RFC3339)).
+			TimeMax(end.Format(time.RFC3339)).
+			OrderBy("startTime").
+			Context(ctx)
 
-	log.Printf("Fetching calendar events from: %s", sanitizeURL(reqURL))
-
-	// #nosec G704 -- URL validated by http.NewRequest, comes from admin config
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		//nolint:errcheck // Best effort for error logging
-		body, _ := io.ReadAll(resp.Body)
-		// #nosec G706 -- Response is sanitized
-		log.Printf("Calendar API error (status %d): %s", resp.StatusCode, sanitizeLogData(string(body)))
-
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var rawEvents []models.CalendarEventRaw
-	if err := json.NewDecoder(resp.Body).Decode(&rawEvents); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
-	}
-
-	events := make([]models.Event, 0, len(rawEvents))
-
-	for idx := range rawEvents {
-		event, err := models.ParseEvent(&rawEvents[idx], c.location)
-		if err != nil {
-			// Skip events that can't be parsed
-			continue
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
 		}
 
-		events = append(events, *event)
+		resp, err := call.Do()
+		if err != nil {
+			return nil, fmt.Errorf("listing events: %w", err)
+		}
+
+		for idx := range resp.Items {
+			event, err := toModelEvent(resp.Items[idx], c.location)
+			if err != nil {
+				// Skip events that can't be parsed rather than failing the batch.
+				log.Printf("Skipping unparseable event in %s: %v", calendarID, err)
+
+				continue
+			}
+
+			events = append(events, *event)
+		}
+
+		pageToken = resp.NextPageToken
+		if pageToken == "" {
+			break
+		}
 	}
 
 	return events, nil
+}
+
+// toModelEvent converts a Google Calendar event into the dashboard's Event
+// model. Reuses the models parser so date/dateTime handling stays consistent.
+func toModelEvent(ev *calendar.Event, loc *time.Location) (*models.Event, error) {
+	raw := models.CalendarEventRaw{
+		Summary: ev.Summary,
+	}
+
+	if ev.Start != nil {
+		raw.Start = models.EventDateTime{DateTime: ev.Start.DateTime, Date: ev.Start.Date}
+	}
+
+	if ev.End != nil {
+		raw.End = models.EventDateTime{DateTime: ev.End.DateTime, Date: ev.End.Date}
+	}
+
+	event, err := models.ParseEvent(&raw, loc)
+	if err != nil {
+		return nil, fmt.Errorf("parsing event %q: %w", ev.Summary, err)
+	}
+
+	return event, nil
+}
+
+// groupEventsByDate sorts events by start time and groups them into a map keyed
+// by the calendar date (midnight in loc) of each event's start time.
+func groupEventsByDate(events []models.Event, loc *time.Location) map[time.Time][]models.Event {
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].Start.Before(events[j].Start)
+	})
+
+	grouped := make(map[time.Time][]models.Event)
+
+	for _, event := range events {
+		date := time.Date(
+			event.Start.Year(), event.Start.Month(), event.Start.Day(),
+			0, 0, 0, 0, loc,
+		)
+		grouped[date] = append(grouped[date], event)
+	}
+
+	return grouped
 }

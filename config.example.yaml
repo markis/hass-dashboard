@@ -1,16 +1,22 @@
-# Home Assistant Dashboard Configuration
+# Dashboard Configuration
 
-home_assistant:
-  # URL to your Home Assistant instance API
-  url: "http://homeassistant.local:8123/api/"
-  # Long-lived access token from Home Assistant
-  # Generate at: Profile -> Security -> Long-Lived Access Tokens
-  token: "your-long-lived-access-token"
-  # List of calendar entity IDs to display
+google:
+  # Path to a Google service account key JSON file. Create a service account
+  # in Google Cloud, enable the Google Calendar API, and download the key.
+  # In a Workspace domain, authorize the service account's client ID in the
+  # Admin console (Security > API Controls > Domain-wide Delegation) for the
+  # https://www.googleapis.com/auth/calendar.readonly scope.
+  credentials_file: "credentials.json"
+  # Workspace user email whose calendars the service account impersonates.
+  # Required when using domain-wide delegation; the user must have access to the
+  # calendars listed below.
+  impersonate: "you@example.com"
+  # Calendar IDs to display. Use "primary" for the impersonated user's primary
+  # calendar, or the calendar's email address (found in Calendar settings).
   calendars:
-    - calendar.family
-    - calendar.work
-    - calendar.holidays
+    - primary
+    - family@example.com
+    - holidays@group.v.calendar.google.com
 
 openweathermap:
   # API key from OpenWeatherMap

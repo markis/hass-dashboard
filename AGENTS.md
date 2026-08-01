@@ -4,7 +4,7 @@ This document contains essential information for AI coding agents working in the
 
 ## Project Overview
 
-A Go-based dashboard image generator for Home Assistant that displays calendar events and weather forecasts. Uses chromedp for rendering HTML to PNG images suitable for e-ink displays.
+A Go-based dashboard image generator that displays calendar events and weather forecasts. Uses chromedp for rendering HTML to PNG images suitable for e-ink displays. Calendar events are read directly from the Google Calendar API using a service account with Workspace domain-wide delegation; weather comes from OpenWeatherMap.
 
 **Module**: `github.com/markis/hass-dashboard`
 **Go Version**: 1.25.0
@@ -177,7 +177,7 @@ go mod download
 - Use `httptest.NewServer()` for testing HTTP clients
 - Mock external dependencies
 - Test error conditions, not just happy paths
-- Example test names: `TestWeatherClientGetWeather`, `TestNewCalendarClient`
+- Example test names: `TestWeatherClientGetWeather`, `TestCalendarClientGetCalendars`, `TestGroupEventsByDate`
 
 ### Concurrency
 - Use `sync.RWMutex` for shared state that's read often, written rarely
@@ -188,7 +188,7 @@ go mod download
 
 ### Struct Tags
 - YAML tags must match the external API/config format exactly
-- Use lowercase with underscores for YAML: `yaml:"home_assistant"`
+- Use lowercase with underscores for YAML: `yaml:"credentials_file"`
 - JSON tags should be lowercase/camelCase as appropriate: `json:"calendarId"`
 
 ### Best Practices
@@ -240,7 +240,14 @@ Test files (`*_test.go`) are exempted from these linters:
 
 ## Common Patterns in This Codebase
 
-- HTTP clients use 30-second timeouts
+- HTTP clients use 30-second timeouts (see `WeatherClient`)
+- Google Calendar client authenticates with a service account JWT config
+  (`google.JWTConfigFromJSON` + `calendar.CalendarReadonlyScope`) and impersonates
+  a Workspace user via `jwtConfig.Subject`; no `token.json` is needed because the
+  service account self-signs JWTs and exchanges them for short-lived access tokens
+  at runtime (see `internal/clients/calendar.go`)
+- Calendar events are fetched with paginated `Events.List(...).SingleEvents(true)`
+  calls and grouped by date via the pure `groupEventsByDate` helper
 - Caching with `sync.RWMutex` and TTL expiry (see `WeatherClient`)
 - Stale cache fallback on API errors for resilience
 - Context-aware operations with proper propagation

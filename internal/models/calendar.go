@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// CalendarEventRaw represents a raw calendar event from Home Assistant API.
+// CalendarEventRaw represents a raw calendar event from the calendar API.
 type CalendarEventRaw struct {
 	Summary string        `json:"summary"`
 	Start   EventDateTime `json:"start"`

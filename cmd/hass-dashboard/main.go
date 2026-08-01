@@ -19,18 +19,19 @@ import (
 
 // Config holds application configuration loaded from YAML file.
 type Config struct {
-	HomeAssistant   HomeAssistantConfig `yaml:"home_assistant"`
-	OpenWeatherMap  OpenWeatherConfig   `yaml:"openweathermap"`
-	Output          OutputConfig        `yaml:"output"`
-	Timezone        string              `yaml:"timezone"`
-	RefreshInterval int                 `yaml:"refresh_interval"` // seconds
+	Google          GoogleConfig      `yaml:"google"`
+	OpenWeatherMap  OpenWeatherConfig `yaml:"openweathermap"`
+	Output          OutputConfig      `yaml:"output"`
+	Timezone        string            `yaml:"timezone"`
+	RefreshInterval int               `yaml:"refresh_interval"` // seconds
 }
 
-// HomeAssistantConfig holds Home Assistant configuration.
-type HomeAssistantConfig struct {
-	URL       string   `yaml:"url"`
-	Token     string   `yaml:"token"`
-	Calendars []string `yaml:"calendars"`
+// GoogleConfig holds Google Calendar configuration. Calendars are read via a
+// service account with Workspace domain-wide delegation.
+type GoogleConfig struct {
+	CredentialsFile string   `yaml:"credentials_file"`
+	Impersonate     string   `yaml:"impersonate"`
+	Calendars       []string `yaml:"calendars"`
 }
 
 // OpenWeatherConfig holds OpenWeatherMap configuration.
@@ -63,17 +64,26 @@ func main() {
 		log.Fatalf("Invalid timezone %q: %v", config.Timezone, err)
 	}
 
-	// Create clients (before context setup to allow fatal errors)
-	calendarClient := clients.NewCalendarClient(
-		config.HomeAssistant.URL,
-		config.HomeAssistant.Token,
+	// Set up context for client construction (service account auth may make a
+	// network call to exchange the JWT for an access token).
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Create clients (before signal handling setup to allow fatal errors)
+	calendarClient, err := clients.NewCalendarClient(
+		ctx,
+		config.Google.CredentialsFile,
+		config.Google.Impersonate,
 		loc,
 	)
-	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
+	if err != nil {
+		cancel()
 
-	// Set up context with cancellation
-	ctx, cancel := context.WithCancel(context.Background())
+		log.Fatalf("Failed to create calendar client: %v", err)
+	}
+
 	defer cancel()
+
+	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
 
 	// Handle shutdown signals
 	sigChan := make(chan os.Signal, 1)
@@ -144,7 +154,7 @@ func generateDashboard(
 	}()
 
 	// Fetch calendar events
-	allEvents, err := calendarClient.GetCalendars(ctx, config.HomeAssistant.Calendars, startDate, endDate)
+	allEvents, err := calendarClient.GetCalendars(ctx, config.Google.Calendars, startDate, endDate)
 	if err != nil {
 		return err
 	}

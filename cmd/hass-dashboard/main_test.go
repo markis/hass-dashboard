@@ -9,11 +9,11 @@ import (
 func TestLoadConfigDefaults(t *testing.T) {
 	// Create a minimal config file
 	configContent := `
-home_assistant:
-  url: "http://localhost:8123/api/"
-  token: "test-token"
+google:
+  credentials_file: "credentials.json"
+  impersonate: ""
   calendars:
-    - calendar.test
+    - primary
 openweathermap:
   api_key: "test-key"
   latitude: 40.7128
@@ -59,13 +59,13 @@ openweathermap:
 
 func TestLoadConfigCustomValues(t *testing.T) {
 	configContent := `
-home_assistant:
-  url: "http://ha.local:8123/api/"
-  token: "my-long-lived-token"
+google:
+  credentials_file: "/secrets/service-account.json"
+  impersonate: "user@example.com"
   calendars:
-    - calendar.family
-    - calendar.work
-    - calendar.holidays
+    - primary
+    - family@example.com
+    - holidays@group.v.calendar.google.com
 openweathermap:
   api_key: "owm-api-key"
   latitude: 51.5074
@@ -90,17 +90,17 @@ refresh_interval: 300
 		t.Fatalf("loadConfig error: %v", err)
 	}
 
-	// Check Home Assistant config
-	if config.HomeAssistant.URL != "http://ha.local:8123/api/" {
-		t.Errorf("HomeAssistant.URL = %q, want %q", config.HomeAssistant.URL, "http://ha.local:8123/api/")
+	// Check Google config
+	if config.Google.CredentialsFile != "/secrets/service-account.json" {
+		t.Errorf("Google.CredentialsFile = %q, want %q", config.Google.CredentialsFile, "/secrets/service-account.json")
 	}
 
-	if config.HomeAssistant.Token != "my-long-lived-token" {
-		t.Errorf("HomeAssistant.Token = %q, want %q", config.HomeAssistant.Token, "my-long-lived-token")
+	if config.Google.Impersonate != "user@example.com" {
+		t.Errorf("Google.Impersonate = %q, want %q", config.Google.Impersonate, "user@example.com")
 	}
 
-	if len(config.HomeAssistant.Calendars) != 3 {
-		t.Errorf("len(HomeAssistant.Calendars) = %d, want 3", len(config.HomeAssistant.Calendars))
+	if len(config.Google.Calendars) != 3 {
+		t.Errorf("len(Google.Calendars) = %d, want 3", len(config.Google.Calendars))
 	}
 
 	// Check OpenWeatherMap config
@@ -155,8 +155,8 @@ func TestLoadConfigInvalidYAML(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	invalidContent := `
-home_assistant:
-  url: [invalid yaml
+google:
+  credentials_file: [invalid yaml
 `
 	if err := os.WriteFile(configPath, []byte(invalidContent), 0o600); err != nil {
 		t.Fatalf("failed to write config file: %v", err)
@@ -194,9 +194,9 @@ func TestLoadConfigEmptyFile(t *testing.T) {
 func TestLoadConfigPartialOverride(t *testing.T) {
 	// Only override some values, others should use defaults
 	configContent := `
-home_assistant:
-  url: "http://localhost:8123/api/"
-  token: "token"
+google:
+  credentials_file: "credentials.json"
+  impersonate: ""
   calendars: []
 openweathermap:
   api_key: "key"
