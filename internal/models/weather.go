@@ -134,29 +134,53 @@ const (
 	Snow         = 600
 )
 
+// Display labels and CSS classes returned by WeatherToIconName. Defined as
+// constants so the repeated literals are not duplicated across the codebase.
+const (
+	cssThunderstorm = "wi wi-thunderstorm"
+	cssSprinkle     = "wi wi-sprinkle"
+	cssRain         = "wi wi-rain"
+	cssSnow         = "wi wi-snow"
+	cssFog          = "wi wi-fog"
+	cssDust         = "wi wi-dust"
+	cssDaySunny     = "wi wi-day-sunny"
+	cssCloud        = "wi wi-cloud"
+	cssCloudy       = "wi wi-cloudy"
+	cssNA           = "wi wi-na"
+
+	labelThunderstorm = "Thunderstorm"
+	labelDrizzle      = "Drizzle"
+	labelRain         = "Rain"
+	labelSnow         = "Snow"
+	labelDust         = "Dust"
+	labelClear        = "Clear"
+	labelPartlyCloudy = "Partly Cloudy"
+	labelUnknown      = "Unknown"
+)
+
 // WeatherToIconName converts a weather code to CSS class and condition name.
 //
 //nolint:gocyclo,cyclop,nonamedreturns // Weather code mapping requires many cases, named returns for clarity
 func WeatherToIconName(weatherCode int) (cssClass, name string) {
 	switch {
 	case weatherCode >= Thunderstorm && weatherCode < Thunderstorm+100:
-		return "wi wi-thunderstorm", "Thunderstorm"
+		return cssThunderstorm, labelThunderstorm
 	case weatherCode >= Drizzle && weatherCode < Drizzle+100:
-		return "wi wi-sprinkle", "Drizzle"
+		return cssSprinkle, labelDrizzle
 	case weatherCode >= Rain && weatherCode < Rain+100:
-		return "wi wi-rain", "Rain"
+		return cssRain, labelRain
 	case weatherCode >= Snow && weatherCode < Snow+100:
-		return "wi wi-snow", "Snow"
+		return cssSnow, labelSnow
 	case weatherCode == 701:
-		return "wi wi-fog", "Mist"
+		return cssFog, "Mist"
 	case weatherCode == 711:
 		return "wi wi-smoke", "Smoke"
 	case weatherCode == 721:
 		return "wi wi-day-haze", "Haze"
 	case weatherCode == 731 || weatherCode == 761:
-		return "wi wi-dust", "Dust"
+		return cssDust, labelDust
 	case weatherCode == 741:
-		return "wi wi-fog", "Fog"
+		return cssFog, "Fog"
 	case weatherCode == 751:
 		return "wi wi-sandstorm", "Sand"
 	case weatherCode == 762:
@@ -166,15 +190,15 @@ func WeatherToIconName(weatherCode int) (cssClass, name string) {
 	case weatherCode == 781:
 		return "wi wi-tornado", "Tornado"
 	case weatherCode == 800:
-		return "wi wi-day-sunny", "Clear"
+		return cssDaySunny, labelClear
 	case weatherCode == 801:
-		return "wi wi-cloud", "Few Clouds"
+		return cssCloud, "Few Clouds"
 	case weatherCode == 802 || weatherCode == 803:
-		return "wi wi-cloudy", "Partly Cloudy"
+		return cssCloudy, labelPartlyCloudy
 	case weatherCode == 804:
-		return "wi wi-cloudy", "Overcast"
+		return cssCloudy, "Overcast"
 	default:
-		return "wi wi-na", "Unknown"
+		return cssNA, labelUnknown
 	}
 }
 

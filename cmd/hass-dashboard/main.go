@@ -17,6 +17,16 @@ import (
 	"github.com/markis/hass-dashboard/internal/render"
 )
 
+// Default configuration values applied when the config file omits them.
+const (
+	defaultTimezone        = "America/New_York"
+	defaultOutputPath      = "output.jpg"
+	defaultRefreshInterval = 600
+	defaultOutputWidth     = 820
+	defaultOutputHeight    = 1200
+	defaultOutputRotate    = 270
+)
+
 // Config holds application configuration loaded from YAML file.
 type Config struct {
 	Google          GoogleConfig      `yaml:"google"`
@@ -223,13 +233,13 @@ func loadConfig(path string) (*Config, error) {
 
 	config := &Config{
 		// Set defaults
-		Timezone:        "America/New_York",
-		RefreshInterval: 600,
+		Timezone:        defaultTimezone,
+		RefreshInterval: defaultRefreshInterval,
 		Output: OutputConfig{
-			Path:   "output.jpg",
-			Width:  820,
-			Height: 1200,
-			Rotate: 270,
+			Path:   defaultOutputPath,
+			Width:  defaultOutputWidth,
+			Height: defaultOutputHeight,
+			Rotate: defaultOutputRotate,
 		},
 	}
 

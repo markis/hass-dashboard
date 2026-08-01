@@ -25,3 +25,6 @@ jobs:
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
+        with:
+          # Pin to the same version used locally to keep CI and dev in sync.
+          version: v2.12.2
