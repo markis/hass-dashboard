@@ -29,6 +29,7 @@ linters:
     - wsl              # Deprecated, replaced by wsl_v5.
     - noctx            # Not needed for simple HTTP clients.
     - perfsprint       # Minor optimization, not critical.
+    - gomodguard       # Deprecated in v2.12.0; replaced by gomodguard_v2 (enabled via default: all).
 
   exclusions:
     rules:
