@@ -15,7 +15,7 @@ env:
   PLATFORMS: linux/amd64
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -24,9 +24,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        # Full history and tags are needed to compute the next version.
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -38,6 +38,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine version
+        id: version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              # Manual tag push: build with the pushed tag's version as-is.
+              version="${GITHUB_REF#refs/tags/}"
+              version="${version#v}"
+              echo "Building from pushed tag v$version"
+              ;;
+            *)
+              # Push to main: bump the patch version from the newest v* tag.
+              latest="$(git tag -l 'v*' --sort=-v:refname | head -n 1)"
+              latest="${latest#v}"
+              if [[ -z "$latest" ]]; then
+                version="0.0.1"
+              else
+                major="${latest%%.*}"
+                rest="${latest#*.}"
+                minor="${rest%%.*}"
+                patch="${rest#*.}"
+                version="$major.$minor.$((patch + 1))"
+              fi
+              echo "Auto-bumping version to v$version"
+              ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Push version tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "Tag v$version already exists, skipping tag creation"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$version" -m "Auto-release v$version ($(git rev-parse --short HEAD))"
+            git push origin "v$version"
+          fi
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v4
@@ -47,6 +88,8 @@ jobs:
           tags: |
             # set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
+            # auto-versioned tag for commits on the default branch
+            type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
