@@ -210,6 +210,60 @@ google:
 	}
 }
 
+func TestLoadConfigServe(t *testing.T) {
+	configContent := `
+serve:
+  enabled: true
+  listen: ":9090"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	config, err := loadConfig(configPath)
+	if err != nil {
+		t.Fatalf("loadConfig error: %v", err)
+	}
+
+	if !config.Serve.Enabled {
+		t.Error("Serve.Enabled = false, want true")
+	}
+
+	if want := ":9090"; config.Serve.Listen != want {
+		t.Errorf("Serve.Listen = %q, want %q", config.Serve.Listen, want)
+	}
+}
+
+func TestLoadConfigServeDefaultsToDisabled(t *testing.T) {
+	// No serve section — serving stays off with the default listen address.
+	configContent := `
+google:
+  credentials_file: "credentials.json"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	config, err := loadConfig(configPath)
+	if err != nil {
+		t.Fatalf("loadConfig error: %v", err)
+	}
+
+	if config.Serve.Enabled {
+		t.Error("Serve.Enabled = true, want false")
+	}
+
+	if want := ":8080"; config.Serve.Listen != want {
+		t.Errorf("Serve.Listen = %q, want %q (default)", config.Serve.Listen, want)
+	}
+}
+
 func TestLoadConfigFileNotFound(t *testing.T) {
 	_, err := loadConfig("/nonexistent/config.yaml")
 	if err == nil {

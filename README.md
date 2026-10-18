@@ -59,7 +59,7 @@ go build -o hass-dashboard ./cmd/hass-dashboard
 
 ### Kubernetes
 
-Mount the service account key from a Secret and the config from a ConfigMap:
+Mount the service account key from a Secret and the config from a ConfigMap. Enable `serve` in the config so the app itself serves the image on its `listen` address — no sidecar web server needed.
 
 ```bash
 # Create the secret from your downloaded service account key JSON
@@ -90,6 +90,9 @@ data:
       rotate: 270
     timezone: "America/New_York"
     refresh_interval: 600
+    serve:
+      enabled: true
+      listen: ":8080"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -190,6 +193,14 @@ timezone: "America/New_York"
 
 # How often to regenerate the dashboard (in seconds)
 refresh_interval: 600
+
+serve:
+  # Serve the current image read-only at /<basename of output.path>
+  # (e.g. "/output/dashboard.png" → "/dashboard.png"). Requests never
+  # trigger a render; the e-ink display gets a 304 while the image is
+  # unchanged.
+  enabled: true
+  listen: ":8080"
 ```
 
 ### Configuration Options
@@ -202,12 +213,14 @@ refresh_interval: 600
 | `openweathermap.api_key` | OpenWeatherMap API key | - |
 | `openweathermap.latitude` | Location latitude | - |
 | `openweathermap.longitude` | Location longitude | - |
-| `output.path` | Output image path | `output.png` |
+| `output.path` | Output image path | `output.jpg` |
 | `output.width` | Image width in pixels | `820` |
 | `output.height` | Image height in pixels | `1200` |
 | `output.rotate` | Rotation in degrees | `270` |
 | `timezone` | IANA timezone name | `America/New_York` |
 | `refresh_interval` | Refresh interval in seconds | `600` |
+| `serve.enabled` | Serve the image over HTTP | `false` |
+| `serve.listen` | Listen address for the image server (non-root cannot bind :80) | `:8080` |
 | `otel.enabled` | Enable OpenTelemetry traces/metrics export | `false` |
 | `otel.protocol` | OTLP transport: `http/protobuf` or `grpc` | `http/protobuf` |
 | `otel.endpoint` | OTLP base endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT` overrides) | `http://localhost:4318` |
@@ -218,7 +231,18 @@ refresh_interval: 600
 ./hass-dashboard --config config.yaml
 ```
 
-The application will generate a dashboard image immediately and then regenerate it at the configured interval. The generated PNG image can be served to e-ink displays or other devices.
+The application will generate a dashboard image immediately and then regenerate it at the configured interval. The generated image can be served to e-ink displays or other devices.
+
+### Serving the Image over HTTP
+
+With `serve.enabled: true` the app serves the current image at `/<basename of output.path>` (`/output/1.jpg` → `/1.jpg`) on `serve.listen`:
+
+- **Requests never trigger generation** — the image is precomputed by the generation loop and served purely from disk. Before the very first render the route returns 404.
+- Conditional GETs (`If-Modified-Since` / `If-None-Match`) return **304 while the image is unchanged**: when the underlying data hasn't changed, the render is skipped and the image file's modification time stays untouched.
+- Range requests and `HEAD` work like a standard static file.
+- Only the image route is exposed; other files next to it are not served.
+
+Use an `httpGet` readiness probe on the served URL with your container platform: it passes only once the image exists, so consumers never reach a cold server.
 
 ## Health Check
 

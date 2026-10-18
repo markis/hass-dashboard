@@ -41,6 +41,18 @@ timezone: "America/New_York"
 # How often to regenerate the dashboard (in seconds)
 refresh_interval: 600
 
+# Serve the generated image over HTTP (optional)
+serve:
+  # When false (default) no HTTP server runs — the image is only written to
+  # output.path. When true, the current image is served read-only at
+  # /<basename of output.path> (e.g. "/output/1.jpg" → "/1.jpg"); requests
+  # never trigger a render, and the e-ink display gets a 304 while the image
+  # is unchanged. The filename should be URL-safe.
+  enabled: false
+  # Listen address. Non-root processes cannot bind :80, so use a port
+  # above 1024.
+  # listen: ":8080"
+
 # OpenTelemetry export (traces + metrics over OTLP)
 otel:
   # When false (default) the no-op SDK stays installed: instrumented code

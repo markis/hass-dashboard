@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,6 +21,7 @@ import (
 	"github.com/markis/hass-dashboard/internal/clients"
 	"github.com/markis/hass-dashboard/internal/models"
 	"github.com/markis/hass-dashboard/internal/render"
+	"github.com/markis/hass-dashboard/internal/serve"
 	"github.com/markis/hass-dashboard/internal/telemetry"
 )
 
@@ -30,6 +33,7 @@ const (
 	defaultOutputWidth     = 820
 	defaultOutputHeight    = 1200
 	defaultOutputRotate    = 270
+	defaultServeListen     = ":8080"
 )
 
 // Attribute values used by the generation-loop metrics and spans.
@@ -55,6 +59,7 @@ type Config struct {
 	Otel            telemetry.Config  `yaml:"otel"`
 	Timezone        string            `yaml:"timezone"`
 	RefreshInterval int               `yaml:"refresh_interval"` // seconds
+	Serve           serve.Config      `yaml:"serve"`
 }
 
 // GoogleConfig holds Google Calendar configuration. Calendars are read via a
@@ -139,6 +144,20 @@ func main() {
 		log.Fatalf("Failed to create cycle metrics: %v", err)
 	}
 
+	// HTTP server is read-only image serving: it starts before the generation
+	// loop so the dashboard URL is addressable right away, serves whatever
+	// already exists on disk, and 404s until the first render lands.
+	var imageServer *serve.Server
+	if config.Serve.Enabled {
+		imageServer, err = startImageServer(config)
+		if err != nil {
+			stopTelemetry(shutdownTelemetry)
+			cancel()
+
+			log.Fatalf("Failed to create HTTP server: %v", err)
+		}
+	}
+
 	defer stopTelemetry(shutdownTelemetry)
 	defer cancel()
 
@@ -154,6 +173,71 @@ func main() {
 
 	log.Println("Starting dashboard generator...")
 
+	// The generation loop runs concurrently with serving: the display polls
+	// at its own cadence and never triggers a render.
+	loopDone := make(chan struct{})
+	go func() {
+		defer close(loopDone)
+
+		runGenerationLoop(ctx, metrics, config, calendarClient, weatherClient, loc)
+	}()
+
+	<-ctx.Done()
+	log.Println("Shutting down...")
+
+	// Drain serving first so serving spans end before telemetry flushes, then
+	// let the generation loop finish its current cycle (if any).
+	stopImageServer(imageServer)
+
+	<-loopDone
+}
+
+// startImageServer builds the read-only HTTP image server and launches its
+// listen loop. It returns after the server is configured, not bound; binding
+// failures are logged as warnings by the listener goroutine.
+func startImageServer(config *Config) (*serve.Server, error) {
+	imageServer, err := serve.New(config.Serve.Listen, config.Output.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Serving dashboard over HTTP on %s at %s", config.Serve.Listen, imageServer.Route())
+
+	go func() {
+		if serveErr := imageServer.ListenAndServe(); !errors.Is(serveErr, http.ErrServerClosed) {
+			log.Printf("Warning: dashboard HTTP server: %v", serveErr)
+		}
+	}()
+
+	return imageServer, nil
+}
+
+// stopImageServer drains in-flight serving requests (no-op when serving is
+// disabled) bounded by the serving shutdown timeout.
+func stopImageServer(imageServer *serve.Server) {
+	if imageServer == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), serve.ShutdownTimeout)
+	defer cancel()
+
+	if err := imageServer.Shutdown(ctx); err != nil {
+		log.Printf("Warning: HTTP server shutdown: %v", err)
+	}
+}
+
+// runGenerationLoop regenerates the dashboard immediately and then on every
+// refresh interval until ctx is canceled. It is read-write to the output file
+// only; serving reads the same file without ever rendering on demand.
+func runGenerationLoop(
+	ctx context.Context,
+	metrics *cycleMetrics,
+	config *Config,
+	calendarClient *clients.CalendarClient,
+	weatherClient *clients.WeatherClient,
+	loc *time.Location,
+) {
 	// Generate immediately, then on interval
 	refreshInterval := time.Duration(config.RefreshInterval) * time.Second
 	ticker := time.NewTicker(refreshInterval)
@@ -421,6 +505,9 @@ func loadConfig(path string) (*Config, error) {
 			Width:  defaultOutputWidth,
 			Height: defaultOutputHeight,
 			Rotate: defaultOutputRotate,
+		},
+		Serve: serve.Config{
+			Listen: defaultServeListen,
 		},
 	}
 
