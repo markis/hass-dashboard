@@ -227,9 +227,15 @@ hass-dashboard/
 
 ## Disabled Linters
 
-The following linters are explicitly disabled (see `.golangci.yml` for reasons):
-- `wrapcheck`, `exhaustruct`, `ireturn`, `err113`, `mnd`
-- `noinlineerr`, `tagliatelle`, `wsl`, `noctx`, `perfsprint`
+The linter configuration uses an explicit enable list (not `default: all`), so
+that renamed linters (e.g. `exhaustruct` -> `exhaustruct_v5`) do not silently
+start running. The following linters are deliberately not enabled (see
+`.golangci.yml` for reasons):
+- `wrapcheck`, `exhaustruct`/`exhaustruct_v5`, `ireturn`, `err113`, `mnd`
+- `noinlineerr`, `tagliatelle`, `noctx`, `perfsprint`
+
+Note: the deprecated `wsl` and `gomodguard` names are also not enabled, but
+their replacements `wsl_v5` and `gomodguard_v2` are enabled.
 
 ## Test Files Exemptions
 

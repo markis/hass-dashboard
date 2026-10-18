@@ -6,7 +6,9 @@ formatters:
     - goimports
   settings:
     gofumpt:
-      extra-rules: true
+      extra:
+        clothe-returns: true
+        group-params: true
     goimports:
       local-prefixes:
         - github.com/markis/hass-dashboard
@@ -16,20 +18,114 @@ run:
   modules-download-mode: readonly
 
 linters:
-  default: all
-  disable:
-    # Too noisy or not applicable for this project.
-    - wrapcheck
-    - exhaustruct
-    - ireturn
-    - err113
-    - mnd              # Magic number detection is too strict.
-    - noinlineerr      # Inline error handling is fine.
-    - tagliatelle      # JSON tags match API response format.
-    - wsl              # Deprecated, replaced by wsl_v5.
-    - noctx            # Not needed for simple HTTP clients.
-    - perfsprint       # Minor optimization, not critical.
-    - gomodguard       # Deprecated in v2.12.0; replaced by gomodguard_v2 (enabled via default: all).
+  # Explicit list instead of `default: all`, so that a renamed linter (like
+  # exhaustruct -> exhaustruct_v5) does not silently appear and start failing
+  # CI. New linters must be added here on purpose.
+  default: none
+  enable:
+    - arangolint
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - clickhouselint
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - depguard
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - forcetypeassert
+    - funcorder
+    - funlen
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - gochecksumtype
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godoclint
+    - godot
+    - godox
+    - goheader
+    - gomoddirectives
+    - gomodguard_v2
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - govet
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - nlreturn
+    - nolintlint
+    - nonamedreturns
+    - nosprintfhostport
+    - paralleltest
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - testableexamples
+    - testifylint
+    - testpackage
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unqueryvet
+    - unused
+    - usestdlibvars
+    - usetesting
+    - varnamelen
+    - wastedassign
+    - whitespace
+    - wsl_v5
+    - zerologlint
 
   exclusions:
     rules:
