@@ -32,8 +32,10 @@ const (
 	idleTimeout       = 60 * time.Second
 )
 
-// spanName is the serving span name; it mirrors the "dashboard.generate"
-// span from the generation loop as a sibling root trace.
+// spanName is the serving operation string handed to otelhttp. The current
+// otelhttp version names spans from the request itself ("<method> <path>",
+// e.g. "GET /1.jpg"); the constant stays in one place in case that behavior
+// needs to be pinned with a formatter option later.
 const spanName = "dashboard.serve"
 
 // Config controls serving the rendered dashboard image over HTTP.
