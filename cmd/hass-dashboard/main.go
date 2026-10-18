@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -96,16 +96,20 @@ type cycleMetrics struct {
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to configuration file")
 
+	// Structured JSON logs on stdout, installed as the default logger so every
+	// package's slog calls share this handler.
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	flag.Parse()
 
 	config, err := loadConfig(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		fail("Failed to load config", err, nil)
 	}
 
 	loc, err := time.LoadLocation(config.Timezone)
 	if err != nil {
-		log.Fatalf("Invalid timezone %q: %v", config.Timezone, err)
+		fail("Invalid timezone", err, nil, "timezone", config.Timezone)
 	}
 
 	// Set up context for client construction (service account auth may make a
@@ -115,9 +119,7 @@ func main() {
 	// Telemetry must be initialized before instrumented components are built.
 	shutdownTelemetry, err := telemetry.Init(ctx, config.Otel)
 	if err != nil {
-		cancel()
-
-		log.Fatalf("Failed to initialize telemetry: %v", err)
+		fail("Failed to initialize telemetry", err, cancel)
 	}
 
 	// Create clients (before signal handling setup to allow fatal errors)
@@ -128,20 +130,20 @@ func main() {
 		loc,
 	)
 	if err != nil {
-		stopTelemetry(shutdownTelemetry)
-		cancel()
-
-		log.Fatalf("Failed to create calendar client: %v", err)
+		fail("Failed to create calendar client", err, func() {
+			stopTelemetry(shutdownTelemetry)
+			cancel()
+		})
 	}
 
 	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
 
 	metrics, err := newCycleMetrics(otel.Meter(instrumentationScope))
 	if err != nil {
-		stopTelemetry(shutdownTelemetry)
-		cancel()
-
-		log.Fatalf("Failed to create cycle metrics: %v", err)
+		fail("Failed to create cycle metrics", err, func() {
+			stopTelemetry(shutdownTelemetry)
+			cancel()
+		})
 	}
 
 	// HTTP server is read-only image serving: it starts before the generation
@@ -151,10 +153,10 @@ func main() {
 	if config.Serve.Enabled {
 		imageServer, err = startImageServer(config)
 		if err != nil {
-			stopTelemetry(shutdownTelemetry)
-			cancel()
-
-			log.Fatalf("Failed to create HTTP server: %v", err)
+			fail("Failed to create HTTP server", err, func() {
+				stopTelemetry(shutdownTelemetry)
+				cancel()
+			})
 		}
 	}
 
@@ -167,11 +169,11 @@ func main() {
 
 	go func() {
 		<-sigChan
-		log.Println("Shutting down...")
+		slog.Info("Shutting down")
 		cancel()
 	}()
 
-	log.Println("Starting dashboard generator...")
+	slog.Info("Starting dashboard generator")
 
 	// The generation loop runs concurrently with serving: the display polls
 	// at its own cadence and never triggers a render.
@@ -183,13 +185,26 @@ func main() {
 	}()
 
 	<-ctx.Done()
-	log.Println("Shutting down...")
+	slog.Info("Shutting down")
 
 	// Drain serving first so serving spans end before telemetry flushes, then
 	// let the generation loop finish its current cycle (if any).
 	stopImageServer(imageServer)
 
 	<-loopDone
+}
+
+// fail logs a fatal startup error and exits with a failure exit code. When
+// cleanup is non-nil it runs first (e.g. flush telemetry, cancel the context).
+// Extra key/value pairs add context attributes to the log record.
+func fail(msg string, err error, cleanup func(), attrs ...any) {
+	if cleanup != nil {
+		cleanup()
+	}
+
+	slog.Error(msg, append([]any{"error", err}, attrs...)...)
+
+	os.Exit(1)
 }
 
 // startImageServer builds the read-only HTTP image server and launches its
@@ -201,11 +216,11 @@ func startImageServer(config *Config) (*serve.Server, error) {
 		return nil, err
 	}
 
-	log.Printf("Serving dashboard over HTTP on %s at %s", config.Serve.Listen, imageServer.Route())
+	slog.Info("Serving dashboard over HTTP", "listen", config.Serve.Listen, "route", imageServer.Route())
 
 	go func() {
 		if serveErr := imageServer.ListenAndServe(); !errors.Is(serveErr, http.ErrServerClosed) {
-			log.Printf("Warning: dashboard HTTP server: %v", serveErr)
+			slog.Warn("Dashboard HTTP server stopped", "error", serveErr)
 		}
 	}()
 
@@ -223,7 +238,7 @@ func stopImageServer(imageServer *serve.Server) {
 	defer cancel()
 
 	if err := imageServer.Shutdown(ctx); err != nil {
-		log.Printf("Warning: HTTP server shutdown: %v", err)
+		slog.Warn("HTTP server shutdown", "error", err)
 	}
 }
 
@@ -246,9 +261,9 @@ func runGenerationLoop(
 
 	for {
 		if cycleErr := runCycle(ctx, metrics, config, calendarClient, weatherClient, loc); cycleErr != nil {
-			log.Printf("Error generating dashboard: %v", cycleErr)
+			slog.Error("Dashboard generation failed", "error", cycleErr)
 		} else {
-			log.Printf("Dashboard generated successfully at %s", config.Output.Path)
+			slog.Info("Dashboard generated successfully", "output", config.Output.Path)
 		}
 
 		select {
@@ -294,7 +309,7 @@ func stopTelemetry(shutdownTelemetry telemetry.ShutdownFunc) {
 	defer stopCancel()
 
 	if err := shutdownTelemetry(shutdownCtx); err != nil {
-		log.Printf("Warning: telemetry shutdown: %v", err)
+		slog.Warn("Telemetry shutdown", "error", err)
 	}
 }
 

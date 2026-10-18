@@ -12,7 +12,7 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"path"
@@ -212,7 +212,7 @@ func buildExporters(
 // failed and the exporter will not get a provider.
 func releaseExporter(ctx context.Context, exporter sdktrace.SpanExporter, cause error) {
 	if err := exporter.Shutdown(ctx); err != nil {
-		log.Printf("Warning: failed to release exporter after %v: %v", cause, err)
+		slog.Warn("Failed to release exporter", "cause", cause, "error", err)
 	}
 }
 

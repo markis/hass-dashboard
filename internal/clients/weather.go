@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -122,7 +122,7 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	log.Printf("Fetching weather data for lat=%.4f, lon=%.4f", lat, lon)
+	slog.Info("Fetching weather data", "lat", lat, "lon", lon)
 
 	// #nosec G704 -- URL validated by http.NewRequest, hardcoded base URL
 	resp, err := c.httpClient.Do(req)
@@ -135,7 +135,8 @@ func (c *WeatherClient) fetchWeather(ctx context.Context, lat, lon float64) (*mo
 		//nolint:errcheck // Best effort for error logging
 		body, _ := io.ReadAll(resp.Body)
 		// #nosec G706 -- Response is sanitized
-		log.Printf("Weather API error (status %d): %s", resp.StatusCode, sanitizeLogData(string(body)))
+		slog.Error("Weather API returned unexpected status", "status_code", resp.StatusCode,
+			"body", sanitizeLogData(string(body)))
 
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}

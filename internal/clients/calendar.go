@@ -4,7 +4,7 @@ package clients
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"sort"
 	"time"
@@ -107,7 +107,7 @@ func (c *CalendarClient) fetchCalendarEvents(
 	calendarID string,
 	start, end time.Time,
 ) ([]models.Event, error) {
-	log.Printf("Fetching calendar events from: %s", calendarID)
+	slog.Info("Fetching calendar events", "calendar_id", calendarID)
 
 	ctx, span := tracer().Start(ctx, "calendar.fetch", trace.WithAttributes(
 		attribute.String("google.calendar.id", calendarID),
@@ -142,7 +142,7 @@ func (c *CalendarClient) fetchCalendarEvents(
 			event, err := toModelEvent(resp.Items[idx], c.location)
 			if err != nil {
 				// Skip events that can't be parsed rather than failing the batch.
-				log.Printf("Skipping unparseable event in %s: %v", calendarID, err)
+				slog.Warn("Skipping unparseable event", "calendar_id", calendarID, "error", err)
 
 				continue
 			}

@@ -195,6 +195,10 @@ go mod download
 - Use `time.Duration` constants: `30 * time.Second`, not magic numbers
 - HTTP client timeouts are required (30s is standard for this project)
 - Log errors before returning when appropriate
+- Use `log/slog` for logging (JSON handler installed as the default logger in `main`):
+  messages are plain, human-readable phrases; values go in key/value attributes with
+  snake_case keys (`"calendar_id"`, `"error"`), never `fmt.Sprintf`-ed into the message.
+  Fatal startup failures use the `fail` helper in `cmd/hass-dashboard/main.go`.
 - Use meaningful variable names over comments
 - Prefer small, focused functions over large ones
 - Group related functionality in the same file

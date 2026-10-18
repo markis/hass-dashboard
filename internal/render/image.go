@@ -4,11 +4,12 @@ package render
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,7 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 	counter, meterErr := meter().Int64Counter("dashboard.render.updates",
 		otelmetric.WithDescription("Dashboard image renders, by result (written or skipped)."))
 	if meterErr != nil {
-		log.Printf("Warning: creating dashboard.render.updates counter: %v", meterErr)
+		slog.Warn("Failed to create dashboard.render.updates counter", "error", meterErr)
 
 		counter = nil
 	}
@@ -88,7 +89,7 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 		unchanged, hashErr := checkDataUnchanged(config.OutputPath, config.DataHash)
 		switch {
 		case hashErr != nil:
-			log.Printf("Warning: Could not check hash file: %v", hashErr)
+			logHashError(config.OutputPath, hashErr)
 		case unchanged:
 			recordRenderUpdate(ctx, span, counter, renderResultSkipped)
 
@@ -113,7 +114,7 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 	// Store data hash if provided
 	if config.DataHash != "" {
 		if err := saveDataHash(config.OutputPath, config.DataHash); err != nil {
-			log.Printf("Warning: Could not write hash file: %v", err)
+			slog.Warn("Failed to write hash file", "output_path", config.OutputPath, "error", err)
 		}
 	}
 
@@ -146,7 +147,7 @@ func checkDataUnchanged(outputPath, dataHash string) (bool, error) {
 	}
 
 	if string(existingHash) == dataHash {
-		log.Printf("Data unchanged (hash: %s), skipping render", dataHash[:12])
+		slog.Info("Data unchanged, skipping render", "hash", dataHash[:12], "output_path", outputPath)
 
 		return true, nil
 	}
@@ -170,12 +171,25 @@ func touchHashFile(outputPath string) error {
 	return os.Chtimes(hashPath, now, now)
 }
 
+// logHashError distinguishes the expected first-render case (no previous
+// hash on disk yet) from real hash-check failures.
+func logHashError(outputPath string, hashErr error) {
+	if errors.Is(hashErr, os.ErrNotExist) {
+		// First render (fresh output dir): nothing to compare against.
+		slog.Debug("No previous hash, rendering fresh")
+
+		return
+	}
+
+	slog.Warn("Failed to check hash file", "output_path", outputPath, "error", hashErr)
+}
+
 // touchHashFileAndReturn touches the hash file and returns nil, or logs and returns error.
 func touchHashFileAndReturn(outputPath string) error {
 	// Touch hash file to update timestamp for healthchecks
-	// (we don't touch the image file to preserve nginx cache)
+	// (we don't touch the image file to preserve serving 304s)
 	if err := touchHashFile(outputPath); err != nil {
-		log.Printf("Warning: Could not update hash file timestamp: %v", err)
+		slog.Warn("Failed to update hash file timestamp", "error", err)
 	}
 
 	return nil
@@ -230,12 +244,12 @@ func buildFullHTML(html, css string) string {
 func renderHTMLToImage(ctx context.Context, fullHTML string, config *ImageConfig) ([]byte, error) {
 	opts := getChromeOptions(config)
 
-	log.Printf("Starting Chrome with user data dir: /tmp/chrome-data")
+	slog.Info("Starting Chrome", "user_data_dir", "/tmp/chrome-data")
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
 	defer allocCancel()
 
-	taskCtx, taskCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
+	taskCtx, taskCancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(chromedpLogf))
 	defer taskCancel()
 
 	// Set timeout
@@ -373,7 +387,7 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.Action[c
 		for attempt := range maxRetries {
 			// Check if we've exceeded timeout
 			if time.Since(start) > timeout {
-				log.Printf("Warning: Font loading timeout exceeded after %v, proceeding anyway", timeout)
+				slog.Warn("Font loading timeout exceeded, proceeding anyway", "timeout", timeout)
 				checkAndLogNetworkErrors(ctx)
 
 				return nil
@@ -394,9 +408,9 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.Action[c
 			})()
 		`))
 			if err != nil {
-				log.Printf("Warning: Failed to check font loading status (attempt %d/%d): %v", attempt+1, maxRetries, err)
+				slog.Warn("Failed to check font loading status", "attempt", attempt+1, "max_attempts", maxRetries, "error", err)
 			} else if fontsReady {
-				log.Printf("Fonts loaded successfully after %d attempt(s) in %v", attempt+1, time.Since(start))
+				slog.Info("Fonts loaded", "attempts", attempt+1, "elapsed", time.Since(start))
 
 				return nil
 			}
@@ -406,16 +420,23 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.Action[c
 			delay := min(baseDelay*time.Duration(1<<uint(attempt)), timeout/2)
 
 			if attempt < maxRetries-1 {
-				log.Printf("Waiting for fonts to load, retrying in %v (attempt %d/%d)", delay, attempt+1, maxRetries)
+				slog.Info("Waiting for fonts to load", "retry_in", delay, "attempt", attempt+1, "max_attempts", maxRetries)
 				time.Sleep(delay)
 			}
 		}
 
-		log.Printf("Warning: Fonts may not be fully loaded after %d retries, proceeding anyway", maxRetries)
+		slog.Warn("Fonts may not be fully loaded, proceeding anyway", "max_attempts", maxRetries)
 		checkAndLogNetworkErrors(ctx)
 
 		return nil // Don't fail, just warn
 	})
+}
+
+// chromedpLogf routes chromedp's internal logging (CDP protocol traffic,
+// page console messages) to slog's debug level, keeping default-level
+// output limited to real events instead of protocol chatter.
+func chromedpLogf(format string, args ...any) {
+	slog.Debug(fmt.Sprintf(format, args...))
 }
 
 // checkAndLogNetworkErrors checks for network-related errors in the console
@@ -433,16 +454,13 @@ func checkAndLogNetworkErrors(ctx context.Context) {
 		})()
 	`))
 	if err != nil {
-		log.Printf("Warning: Could not check for network errors: %v", err)
+		slog.Warn("Failed to check for network errors", "error", err)
 
 		return
 	}
 
 	if hasNetworkErrors {
-		log.Printf(
-			"WARNING: Network errors detected - Font Awesome may have failed to load. " +
-				"Check network connectivity.",
-		)
+		slog.Warn("Network errors detected, Font Awesome may have failed to load")
 	}
 }
 

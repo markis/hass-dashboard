@@ -10,7 +10,7 @@ package serve
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -146,7 +146,7 @@ func serveImage(res http.ResponseWriter, req *http.Request, outputPath string) {
 
 	file, err := os.Open(outputPath) // #nosec G304 -- outputPath is the operator's config value
 	if err != nil {
-		log.Printf("Error serving dashboard image %s: %v", outputPath, err)
+		slog.Error("Failed to open dashboard image", "output_path", outputPath, "error", err)
 		http.Error(res, "dashboard image unavailable", http.StatusInternalServerError)
 
 		return
