@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /hass-dashboard ./cmd/hass-dashboard
 
 
-FROM alpine:3.19 AS runtime
+FROM alpine:3.24 AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/markis/hass-dashboard" \
     org.opencontainers.image.description="Home Assistant Dashboard - generates dashboard images from calendar and weather data" \
