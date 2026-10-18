@@ -9,6 +9,10 @@ import (
 	"sort"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
@@ -52,7 +56,12 @@ func NewCalendarClient(
 		jwtConfig.Subject = impersonate
 	}
 
-	srv, err := calendar.NewService(ctx, option.WithHTTPClient(jwtConfig.Client(ctx)))
+	// Wrap the OAuth2 transport with OTel so each API call produces a client
+	// span (with token handling inside it).
+	httpClient := jwtConfig.Client(ctx)
+	httpClient.Transport = otelhttp.NewTransport(httpClient.Transport)
+
+	srv, err := calendar.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("creating calendar service: %w", err)
 	}
@@ -67,11 +76,23 @@ func (c *CalendarClient) GetCalendars(
 	calendarIDs []string,
 	start, end time.Time,
 ) (map[time.Time][]models.Event, error) {
+	ctx, span := tracer().Start(ctx, "calendar.get_calendars", trace.WithAttributes(
+		attribute.Int("calendar.requested", len(calendarIDs)),
+	))
+
 	allEvents := make([]models.Event, 0)
+
+	defer func() {
+		span.SetAttributes(attribute.Int("calendar.events", len(allEvents)))
+		span.End()
+	}()
 
 	for _, calID := range calendarIDs {
 		events, err := c.fetchCalendarEvents(ctx, calID, start, end)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+
 			return nil, fmt.Errorf("fetching calendar %s: %w", calID, err)
 		}
 
@@ -87,6 +108,11 @@ func (c *CalendarClient) fetchCalendarEvents(
 	start, end time.Time,
 ) ([]models.Event, error) {
 	log.Printf("Fetching calendar events from: %s", calendarID)
+
+	ctx, span := tracer().Start(ctx, "calendar.fetch", trace.WithAttributes(
+		attribute.String("google.calendar.id", calendarID),
+	))
+	defer span.End()
 
 	var events []models.Event
 
@@ -106,6 +132,9 @@ func (c *CalendarClient) fetchCalendarEvents(
 
 		resp, err := call.Do()
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+
 			return nil, fmt.Errorf("listing events: %w", err)
 		}
 
@@ -126,6 +155,8 @@ func (c *CalendarClient) fetchCalendarEvents(
 			break
 		}
 	}
+
+	span.SetAttributes(attribute.Int("calendar.fetched", len(events)))
 
 	return events, nil
 }

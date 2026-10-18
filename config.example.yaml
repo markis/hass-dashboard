@@ -40,3 +40,13 @@ timezone: "America/New_York"
 
 # How often to regenerate the dashboard (in seconds)
 refresh_interval: 600
+
+# OpenTelemetry export (traces + metrics over OTLP/HTTP)
+otel:
+  # When false (default) the no-op SDK stays installed: instrumented code
+  # paths behave identically and nothing is exported.
+  enabled: false
+  # Base OTLP/HTTP endpoint; traces go to <endpoint>/v1/traces and metrics to
+  # <endpoint>/v1/metrics. The standard OTEL_EXPORTER_OTLP_ENDPOINT
+  # environment variable overrides this when set.
+  # endpoint: "http://otel-collector:4318"

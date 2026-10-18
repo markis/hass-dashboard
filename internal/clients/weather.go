@@ -10,6 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/markis/hass-dashboard/internal/models"
 )
 
@@ -31,7 +35,10 @@ type weatherCacheEntry struct {
 // NewWeatherClient creates a new weather client.
 func NewWeatherClient(apiKey string, loc *time.Location) *WeatherClient {
 	return &WeatherClient{
-		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 		apiKey:      apiKey,
 		location:    loc,
 		cache:       make(map[string]*weatherCacheEntry),
@@ -39,8 +46,18 @@ func NewWeatherClient(apiKey string, loc *time.Location) *WeatherClient {
 	}
 }
 
-// GetWeather fetches weather data for a location.
+// GetWeather fetches weather data for a location. Cached entries (including
+// stale fallbacks served after a fetch error) are attributed via the
+// weather.cache.hit span attribute.
 func (c *WeatherClient) GetWeather(ctx context.Context, lat, lon float64) (*models.Weather, error) {
+	ctx, span := tracer().Start(ctx, "weather.get")
+	defer span.End()
+
+	cached := false
+	defer func() {
+		span.SetAttributes(attribute.Bool("weather.cache.hit", cached))
+	}()
+
 	cacheKey := fmt.Sprintf("%.4f,%.4f", lat, lon)
 
 	// Check cache
@@ -50,6 +67,8 @@ func (c *WeatherClient) GetWeather(ctx context.Context, lat, lon float64) (*mode
 		if time.Since(entry.fetchedAt) < c.cacheExpiry {
 			c.cacheMu.RUnlock()
 
+			cached = true
+
 			return entry.weather, nil
 		}
 	}
@@ -57,20 +76,26 @@ func (c *WeatherClient) GetWeather(ctx context.Context, lat, lon float64) (*mode
 	c.cacheMu.RUnlock()
 
 	// Fetch fresh data
-	weather, err := c.fetchWeather(ctx, lat, lon)
-	if err != nil {
+	weather, fetchErr := c.fetchWeather(ctx, lat, lon)
+	if fetchErr != nil {
+		span.RecordError(fetchErr)
+
 		// Return cached data if available, even if stale
 		c.cacheMu.RLock()
 
 		if entry, ok := c.cache[cacheKey]; ok {
 			c.cacheMu.RUnlock()
 
+			cached = true
+
 			return entry.weather, nil
 		}
 
 		c.cacheMu.RUnlock()
 
-		return nil, err
+		span.SetStatus(codes.Error, fetchErr.Error())
+
+		return nil, fetchErr
 	}
 
 	// Update cache
