@@ -1,0 +1,91 @@
+# Auto-merge Dependabot pull requests once CI passes.
+#
+# Dependabot-triggered workflows run fork-like: they get a read-only
+# GITHUB_TOKEN and no Actions secrets, but the permissions key below
+# raises the token scope (see "Troubleshooting Dependabot on GitHub
+# Actions" in the GitHub docs).
+#
+# The repo has no branch protection / required status checks, so
+# `gh pr merge --auto` would merge before CI even finishes. Instead
+# this workflow waits for the PR's check runs, then squash-merges
+# directly. Failure or timeout leaves the PR for manual review.
+name: "dependabot auto-merge"
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    name: automerge
+    runs-on: ubuntu-latest
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.repository == 'markis/hass-dashboard'
+    steps:
+      - id: wait
+        name: Wait for CI checks to pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          deadline=$(( $(date +%s) + 1800 ))
+          while :; do
+            rows="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" --paginate \
+              --jq '.check_runs[] | select(.name != "automerge") | [.name, .status, (.conclusion // "")] | @tsv')"
+            pending=0
+            failed=0
+            count=0
+            while IFS=$'\t' read -r name status conclusion; do
+              [ -z "${name}" ] && continue
+              count=$((count + 1))
+              if [ "${status}" != "completed" ]; then
+                pending=1
+              fi
+              case "${conclusion}" in
+                ""|"success"|"skip") ;;
+                # A neutral run belongs to a superseded commit; ignore it.
+                "neutral") count=$((count - 1)) ;;
+                *) failed=1 ;;
+              esac
+            done <<<"${rows}"
+            if [ "${failed}" -eq 1 ]; then
+              echo "A check run failed; leaving the PR unmerged for manual review."
+              echo "merge=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            if [ "${pending}" -eq 0 ] && [ "${count}" -gt 0 ]; then
+              echo "${count} check run(s) passed."
+              echo "merge=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "${deadline}" ]; then
+              echo "Timed out waiting for CI; leaving the PR unmerged for manual review."
+              echo "merge=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            sleep 30
+          done
+
+      - name: Merge PR (squash)
+        if: steps.wait.outputs.merge == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          head="$(gh pr view "${PR_URL}" --json headRefOid -q .headRefOid)"
+          if [ "${head}" != "${HEAD_SHA}" ]; then
+            echo "PR head moved since checks ran (${head} != ${HEAD_SHA}); skipping."
+            exit 0
+          fi
+          state="$(gh pr view "${PR_URL}" --json state -q .state)"
+          if [ "${state}" != "OPEN" ]; then
+            echo "PR state is ${state}, nothing to merge."
+            exit 0
+          fi
+          gh pr merge --squash "${PR_URL}"
