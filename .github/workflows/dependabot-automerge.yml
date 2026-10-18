@@ -1,4 +1,4 @@
-# Auto-merge Dependabot pull requests.
+# Auto-merge Dependabot pull requests, except for CI changes.
 #
 # Dependabot-triggered workflows run fork-like: they get a read-only
 # GITHUB_TOKEN and no Actions secrets, but the permissions key below
@@ -9,6 +9,13 @@
 # the required 'lint' and 'docker' status checks on main pass. A
 # failing required check cancels the queued auto-merge and leaves the
 # PR open for review.
+#
+# PRs that modify workflow files are deliberately skipped: merging
+# those requires the actor to hold the 'workflows' permission, which
+# GITHUB_TOKEN does not have, so GitHub would only queue the merge and
+# then auto-disable it later ("Tried to create or update workflow
+# without 'workflows' permission"). Gomod and Docker updates never
+# touch .github/workflows and are safe to auto-merge.
 name: "dependabot auto-merge"
 
 on: pull_request
@@ -25,7 +32,29 @@ jobs:
       github.actor == 'dependabot[bot]' &&
       github.repository == 'markis/hass-dashboard'
     steps:
+      - id: gate
+        name: Decide whether the PR may auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files?per_page=100" --jq '.[].filename')"
+          rc=$?
+          if [ "${rc}" -ne 0 ]; then
+            echo "Could not list PR files (rc=${rc}); leaving for manual review."
+            echo "merge=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if printf '%s\n' "${files}" | grep -q '^\.github/workflows/'; then
+            echo "PR modifies workflow files; those stay for manual review."
+            echo "merge=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "merge=true" >> "${GITHUB_OUTPUT}"
+
       - name: Enable auto-merge (squash)
+        if: steps.gate.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
