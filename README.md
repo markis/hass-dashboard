@@ -208,6 +208,8 @@ refresh_interval: 600
 | `output.rotate` | Rotation in degrees | `270` |
 | `timezone` | IANA timezone name | `America/New_York` |
 | `refresh_interval` | Refresh interval in seconds | `600` |
+| `otel.enabled` | Enable OpenTelemetry traces/metrics export | `false` |
+| `otel.endpoint` | OTLP/HTTP base endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT` overrides) | `http://localhost:4318` |
 
 ## Usage
 

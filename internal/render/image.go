@@ -14,6 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/chromedp/chromedp"
 )
 
@@ -51,31 +55,58 @@ func validateOutputPath(path string) error {
 	return nil
 }
 
+// Result attribute values for the dashboard.render.updates counter.
+const (
+	renderResultWritten = "written"
+	renderResultSkipped = "skipped"
+)
+
 // Image takes HTML and CSS content and renders it to a JPEG image.
 // It only writes the file if the content has changed (based on input data SHA-256 hash).
 // If config.DataHash is provided, it compares against stored hash before rendering.
 func Image(ctx context.Context, html, css string, config *ImageConfig) error {
+	ctx, span := tracer().Start(ctx, "render.image")
+	defer span.End()
+
+	counter, meterErr := meter().Int64Counter("dashboard.render.updates",
+		otelmetric.WithDescription("Dashboard image renders, by result (written or skipped)."))
+	if meterErr != nil {
+		log.Printf("Warning: creating dashboard.render.updates counter: %v", meterErr)
+
+		counter = nil
+	}
+
 	// Validate output path to prevent path traversal
-	if err := validateOutputPath(config.OutputPath); err != nil {
-		return err
+	if pathErr := validateOutputPath(config.OutputPath); pathErr != nil {
+		recordError(span, pathErr)
+
+		return pathErr
 	}
 
 	// Check if data has changed before rendering
 	if config.DataHash != "" {
-		if unchanged, err := checkDataUnchanged(config.OutputPath, config.DataHash); err != nil {
-			log.Printf("Warning: Could not check hash file: %v", err)
-		} else if unchanged {
+		unchanged, hashErr := checkDataUnchanged(config.OutputPath, config.DataHash)
+		switch {
+		case hashErr != nil:
+			log.Printf("Warning: Could not check hash file: %v", hashErr)
+		case unchanged:
+			recordRenderUpdate(ctx, span, counter, renderResultSkipped)
+
 			return touchHashFileAndReturn(config.OutputPath)
 		}
 	}
 
 	buf, err := ImageBytes(ctx, html, css, config)
 	if err != nil {
+		recordError(span, err)
+
 		return err
 	}
 
 	// Write image file
 	if err := writeImageFile(buf, config.OutputPath); err != nil {
+		recordError(span, err)
+
 		return err
 	}
 
@@ -86,7 +117,23 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 		}
 	}
 
+	recordRenderUpdate(ctx, span, counter, renderResultWritten)
+
 	return nil
+}
+
+// recordRenderUpdate marks the render span's changed flag and counts the
+// update by result. counter may be nil when the meter could not create it.
+func recordRenderUpdate(ctx context.Context, span trace.Span, counter otelmetric.Int64Counter, result string) {
+	span.SetAttributes(attribute.Bool("dashboard.render.changed", result == renderResultWritten))
+
+	if counter == nil {
+		return
+	}
+
+	counter.Add(ctx, 1, otelmetric.WithAttributes(
+		attribute.String("dashboard.render.result", result),
+	))
 }
 
 // checkDataUnchanged checks if the data hash matches the stored hash.

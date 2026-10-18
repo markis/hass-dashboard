@@ -10,11 +10,16 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"gopkg.in/yaml.v3"
 
 	"github.com/markis/hass-dashboard/internal/clients"
 	"github.com/markis/hass-dashboard/internal/models"
 	"github.com/markis/hass-dashboard/internal/render"
+	"github.com/markis/hass-dashboard/internal/telemetry"
 )
 
 // Default configuration values applied when the config file omits them.
@@ -27,11 +32,27 @@ const (
 	defaultOutputRotate    = 270
 )
 
+// Attribute values used by the generation-loop metrics and spans.
+const (
+	outcomeSuccess = "success"
+	outcomeError   = "error"
+
+	stageHTML     = "html"
+	stageImage    = "image"
+	stageCalendar = "calendar"
+	stageWeather  = "weather"
+)
+
+// instrumentationScope is the scope name shared by the main package's tracer
+// and meter.
+const instrumentationScope = "github.com/markis/hass-dashboard/cmd/hass-dashboard"
+
 // Config holds application configuration loaded from YAML file.
 type Config struct {
 	Google          GoogleConfig      `yaml:"google"`
 	OpenWeatherMap  OpenWeatherConfig `yaml:"openweathermap"`
 	Output          OutputConfig      `yaml:"output"`
+	Otel            telemetry.Config  `yaml:"otel"`
 	Timezone        string            `yaml:"timezone"`
 	RefreshInterval int               `yaml:"refresh_interval"` // seconds
 }
@@ -59,6 +80,14 @@ type OutputConfig struct {
 	Rotate int    `yaml:"rotate"`
 }
 
+// cycleMetrics instruments dashboard generation with a cycle counter and
+// cycle/stage duration histograms.
+type cycleMetrics struct {
+	cycles       otelmetric.Int64Counter
+	cycleSeconds otelmetric.Float64Histogram
+	stageSeconds otelmetric.Float64Histogram
+}
+
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to configuration file")
 
@@ -78,6 +107,14 @@ func main() {
 	// network call to exchange the JWT for an access token).
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Telemetry must be initialized before instrumented components are built.
+	shutdownTelemetry, err := telemetry.Init(ctx, config.Otel)
+	if err != nil {
+		cancel()
+
+		log.Fatalf("Failed to initialize telemetry: %v", err)
+	}
+
 	// Create clients (before signal handling setup to allow fatal errors)
 	calendarClient, err := clients.NewCalendarClient(
 		ctx,
@@ -86,14 +123,24 @@ func main() {
 		loc,
 	)
 	if err != nil {
+		stopTelemetry(shutdownTelemetry)
 		cancel()
 
 		log.Fatalf("Failed to create calendar client: %v", err)
 	}
 
-	defer cancel()
-
 	weatherClient := clients.NewWeatherClient(config.OpenWeatherMap.Key, loc)
+
+	metrics, err := newCycleMetrics(otel.Meter(instrumentationScope))
+	if err != nil {
+		stopTelemetry(shutdownTelemetry)
+		cancel()
+
+		log.Fatalf("Failed to create cycle metrics: %v", err)
+	}
+
+	defer stopTelemetry(shutdownTelemetry)
+	defer cancel()
 
 	// Handle shutdown signals
 	sigChan := make(chan os.Signal, 1)
@@ -114,8 +161,8 @@ func main() {
 	defer ticker.Stop()
 
 	for {
-		if err := generateDashboard(ctx, config, calendarClient, weatherClient, loc); err != nil {
-			log.Printf("Error generating dashboard: %v", err)
+		if cycleErr := runCycle(ctx, metrics, config, calendarClient, weatherClient, loc); cycleErr != nil {
+			log.Printf("Error generating dashboard: %v", cycleErr)
 		} else {
 			log.Printf("Dashboard generated successfully at %s", config.Output.Path)
 		}
@@ -129,8 +176,57 @@ func main() {
 	}
 }
 
+// runCycle instruments one generation cycle with a root span, records its
+// outcome on the cycle metrics, and delegates to generateDashboard.
+func runCycle(
+	ctx context.Context,
+	metrics *cycleMetrics,
+	config *Config,
+	calendarClient *clients.CalendarClient,
+	weatherClient *clients.WeatherClient,
+	loc *time.Location,
+) error {
+	started := time.Now()
+
+	cycleCtx, span := otel.Tracer(instrumentationScope).Start(ctx, "dashboard.generate")
+
+	err := generateDashboard(cycleCtx, metrics, config, calendarClient, weatherClient, loc)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	span.SetAttributes(attribute.String("dashboard.outcome", outcomeFor(err)))
+	span.End()
+
+	metrics.observeCycle(ctx, err, time.Since(started))
+
+	return err
+}
+
+// stopTelemetry flushes and releases the telemetry providers on exit.
+func stopTelemetry(shutdownTelemetry telemetry.ShutdownFunc) {
+	shutdownCtx, stopCancel := context.WithTimeout(context.Background(), telemetry.ShutdownTimeout)
+	defer stopCancel()
+
+	if err := shutdownTelemetry(shutdownCtx); err != nil {
+		log.Printf("Warning: telemetry shutdown: %v", err)
+	}
+}
+
+// outcomeFor maps an error to the cycle outcome attribute value.
+func outcomeFor(err error) string {
+	if err != nil {
+		return outcomeError
+	}
+
+	return outcomeSuccess
+}
+
+// generateDashboard fetches data and renders the dashboard image for one cycle.
 func generateDashboard(
 	ctx context.Context,
+	metrics *cycleMetrics,
 	config *Config,
 	calendarClient *clients.CalendarClient,
 	weatherClient *clients.WeatherClient,
@@ -140,80 +236,25 @@ func generateDashboard(
 	dates, endDate := render.GetCalendarDates(now, 4)
 	startDate := dates[0]
 
-	// Fetch data concurrently
-	type result struct {
-		weather *render.TemplateData
-		err     error
-	}
-
-	weatherChan := make(chan result, 1)
-
-	go func() {
-		weather, err := weatherClient.GetWeather(
-			ctx,
-			config.OpenWeatherMap.Latitude,
-			config.OpenWeatherMap.Longitude,
-		)
-		if err != nil {
-			weatherChan <- result{err: err}
-
-			return
-		}
-
-		weatherChan <- result{weather: &render.TemplateData{Weather: weather}}
-	}()
-
-	// Fetch calendar events
-	allEvents, err := calendarClient.GetCalendars(ctx, config.Google.Calendars, startDate, endDate)
+	events, weather, err := fetchDashboardData(
+		ctx, metrics, config, calendarClient, weatherClient, startDate, endDate)
 	if err != nil {
 		return err
 	}
 
 	// Filter out events that have already ended
-	activeEvents := render.FilterPastEvents(allEvents, now)
+	activeEvents := render.FilterPastEvents(events, now)
 
 	// Deduplicate events on the same day with the same time and title
 	activeEvents = render.DeduplicateEvents(activeEvents)
 
-	// Wait for weather
-	weatherResult := <-weatherChan
-	if weatherResult.err != nil {
-		return weatherResult.err
-	}
-
-	weather := weatherResult.weather.Weather
-
-	// Prepare hourly data (skip first, take every other up to 6)
-	hourly := make([]models.HourlyForecast, 0, 6)
-
-	for i := 1; i < len(weather.Hourly) && len(hourly) < 6; i += 2 {
-		hourly = append(hourly, weather.Hourly[i])
-	}
-
-	// Generate dates with event counts (using active events only)
-	datesWithEvents := render.GenerateDatesWithEvents(dates, activeEvents, now)
-
-	// Draw hourly forecast SVG
-	hourlySVG := render.DrawWeatherForecast(weather.Hourly, 400, 40, 5)
-
-	// Prepare template data
-	templateData := &render.TemplateData{
-		Weather:         weather,
-		Hourly:          hourly,
-		DatesWithEvents: datesWithEvents,
-		Events:          activeEvents,
-		SortedDates:     render.SortedEventDates(activeEvents),
-		HourlySVG:       hourlySVG,
-		WeatherIconsCSS: render.GetWeatherIconsCSS(),
-	}
-
-	// Render HTML (hash is computed from HTML for change detection)
-	html, css, hash, err := render.HTML(templateData)
+	html, css, hash, err := buildTemplate(ctx, metrics, weather, activeEvents, dates, now)
 	if err != nil {
 		return err
 	}
 
-	// Render to image with HTML hash for change detection
+	imageStart := time.Now()
+
 	imageConfig := &render.ImageConfig{
 		Width:      config.Output.Width,
 		Height:     config.Output.Height,
@@ -222,7 +263,147 @@ func generateDashboard(
 		DataHash:   hash,
 	}
 
-	return render.Image(ctx, html, css, imageConfig)
+	imageErr := render.Image(ctx, html, css, imageConfig)
+	metrics.observeStage(ctx, stageImage, time.Since(imageStart))
+
+	return imageErr
+}
+
+// fetchDashboardData runs the weather fetch concurrently with the calendar
+// fetch and records both stage durations.
+func fetchDashboardData(
+	ctx context.Context,
+	metrics *cycleMetrics,
+	config *Config,
+	calendarClient *clients.CalendarClient,
+	weatherClient *clients.WeatherClient,
+	startDate, endDate time.Time,
+) (map[time.Time][]models.Event, *models.Weather, error) {
+	type weatherFetch struct {
+		weather *models.Weather
+		err     error
+	}
+
+	weatherChan := make(chan weatherFetch, 1)
+
+	go func() {
+		stageStart := time.Now()
+
+		weather, weatherErr := weatherClient.GetWeather(
+			ctx,
+			config.OpenWeatherMap.Latitude,
+			config.OpenWeatherMap.Longitude,
+		)
+		if weatherErr != nil {
+			weatherChan <- weatherFetch{err: weatherErr}
+
+			return
+		}
+
+		metrics.observeStage(ctx, stageWeather, time.Since(stageStart))
+
+		weatherChan <- weatherFetch{weather: weather}
+	}()
+
+	stageStart := time.Now()
+
+	events, err := calendarClient.GetCalendars(ctx, config.Google.Calendars, startDate, endDate)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fetching calendars: %w", err)
+	}
+
+	metrics.observeStage(ctx, stageCalendar, time.Since(stageStart))
+
+	fetched := <-weatherChan
+	if fetched.err != nil {
+		return nil, nil, fmt.Errorf("fetching weather: %w", fetched.err)
+	}
+
+	return events, fetched.weather, nil
+}
+
+// buildTemplate prepares the hourly forecast data, event dates, and SVG, then
+// renders the dashboard HTML (hash is computed from HTML for change detection).
+func buildTemplate(
+	ctx context.Context,
+	metrics *cycleMetrics,
+	weather *models.Weather,
+	activeEvents map[time.Time][]models.Event,
+	dates []time.Time,
+	now time.Time,
+) (string, string, string, error) {
+	stageStart := time.Now()
+
+	// Prepare hourly data (skip first, take every other up to 6)
+	hourly := make([]models.HourlyForecast, 0, 6)
+
+	for i := 1; i < len(weather.Hourly) && len(hourly) < 6; i += 2 {
+		hourly = append(hourly, weather.Hourly[i])
+	}
+
+	templateData := &render.TemplateData{
+		Weather:         weather,
+		Hourly:          hourly,
+		DatesWithEvents: render.GenerateDatesWithEvents(dates, activeEvents, now),
+		Events:          activeEvents,
+		SortedDates:     render.SortedEventDates(activeEvents),
+		HourlySVG:       render.DrawWeatherForecast(weather.Hourly, 400, 40, 5),
+		WeatherIconsCSS: render.GetWeatherIconsCSS(),
+	}
+
+	html, css, hash, err := render.HTML(ctx, templateData)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	metrics.observeStage(ctx, stageHTML, time.Since(stageStart))
+
+	return html, css, hash, nil
+}
+
+// newCycleMetrics creates the generation-loop instruments on the given meter.
+func newCycleMetrics(meter otelmetric.Meter) (*cycleMetrics, error) {
+	cycles, err := meter.Int64Counter("dashboard.cycles", otelmetric.WithDescription(
+		"Dashboard generation cycles finished, by outcome."))
+	if err != nil {
+		return nil, fmt.Errorf("creating dashboard.cycles counter: %w", err)
+	}
+
+	cycleSeconds, err := meter.Float64Histogram("dashboard.cycle.duration",
+		otelmetric.WithUnit("s"), otelmetric.WithDescription(
+			"Duration of full dashboard generation cycles."))
+	if err != nil {
+		return nil, fmt.Errorf("creating dashboard.cycle.duration histogram: %w", err)
+	}
+
+	stageSeconds, err := meter.Float64Histogram("dashboard.stage.duration",
+		otelmetric.WithUnit("s"), otelmetric.WithDescription(
+			"Duration of generation stages (weather, calendar, html, image)."))
+	if err != nil {
+		return nil, fmt.Errorf("creating dashboard.stage.duration histogram: %w", err)
+	}
+
+	return &cycleMetrics{
+		cycles:       cycles,
+		cycleSeconds: cycleSeconds,
+		stageSeconds: stageSeconds,
+	}, nil
+}
+
+// observeCycle records one finished cycle with its outcome and duration.
+func (m *cycleMetrics) observeCycle(ctx context.Context, cycleErr error, elapsed time.Duration) {
+	attrs := otelmetric.WithAttributes(attribute.String("dashboard.outcome", outcomeFor(cycleErr)))
+
+	m.cycles.Add(ctx, 1, attrs)
+	m.cycleSeconds.Record(ctx, elapsed.Seconds(), attrs)
+}
+
+// observeStage records the duration of one generation stage (weather,
+// calendar, html, or image).
+func (m *cycleMetrics) observeStage(ctx context.Context, stage string, elapsed time.Duration) {
+	m.stageSeconds.Record(ctx, elapsed.Seconds(), otelmetric.WithAttributes(
+		attribute.String("dashboard.stage", stage),
+	))
 }
 
 func loadConfig(path string) (*Config, error) {

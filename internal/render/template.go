@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
@@ -41,7 +42,10 @@ func GetWeatherIconsCSS() template.CSS {
 
 // HTML generates the dashboard HTML from template data.
 // Returns html, css, hash, error where hash is a SHA-256 hash of the HTML for change detection.
-func HTML(data *TemplateData) (string, string, string, error) {
+func HTML(ctx context.Context, data *TemplateData) (string, string, string, error) {
+	_, span := tracer().Start(ctx, "render.html")
+	defer span.End()
+
 	eventCount := 0
 	maxEvents := 10 // Maximum number of events to display to prevent overflow
 
@@ -82,12 +86,16 @@ func HTML(data *TemplateData) (string, string, string, error) {
 
 	tmpl, err := template.New("dashboard").Funcs(funcMap).Parse(dashboardTemplate)
 	if err != nil {
+		recordError(span, err)
+
 		return "", "", "", fmt.Errorf("parsing template: %w", err)
 	}
 
 	var buf bytes.Buffer
 
 	if err := tmpl.Execute(&buf, data); err != nil {
+		recordError(span, err)
+
 		return "", "", "", fmt.Errorf("executing template: %w", err)
 	}
 

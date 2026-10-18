@@ -1,6 +1,7 @@
 package render
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -288,7 +289,7 @@ func TestHTML(t *testing.T) {
 		WeatherIconsCSS: GetWeatherIconsCSS(),
 	}
 
-	html, css, _, err := HTML(data)
+	html, css, _, err := HTML(context.Background(), data)
 	if err != nil {
 		t.Fatalf("HTML error: %v", err)
 	}
@@ -360,7 +361,7 @@ func TestHTMLWithEvents(t *testing.T) {
 		WeatherIconsCSS: GetWeatherIconsCSS(),
 	}
 
-	html, css, _, err := HTML(data)
+	html, css, _, err := HTML(context.Background(), data)
 	if err != nil {
 		t.Fatalf("HTML error: %v", err)
 	}
@@ -425,7 +426,7 @@ func TestHTMLFormattingFunctions(t *testing.T) {
 		WeatherIconsCSS: GetWeatherIconsCSS(),
 	}
 
-	html, _, _, err := HTML(data)
+	html, _, _, err := HTML(context.Background(), data)
 	if err != nil {
 		t.Fatalf("HTML error: %v", err)
 	}
@@ -498,7 +499,7 @@ func TestHTMLTemplateFunctions(t *testing.T) {
 			WeatherIconsCSS: GetWeatherIconsCSS(),
 		}
 
-		html, _, _, err := HTML(data)
+		html, _, _, err := HTML(context.Background(), data)
 		if err != nil {
 			t.Fatalf("HTML error: %v", err)
 		}
@@ -535,7 +536,7 @@ func TestHTMLTemplateFunctions(t *testing.T) {
 			WeatherIconsCSS: GetWeatherIconsCSS(),
 		}
 
-		html, _, _, err := HTML(data)
+		html, _, _, err := HTML(context.Background(), data)
 		if err != nil {
 			t.Fatalf("HTML error: %v", err)
 		}
@@ -730,7 +731,7 @@ func TestBase64Encode(t *testing.T) {
 }
 
 func TestCSSLayoutContainsFlexBody(t *testing.T) {
-	_, css, _, err := HTML(&TemplateData{
+	_, css, _, err := HTML(context.Background(), &TemplateData{
 		Weather: &models.Weather{
 			Forecasts: []models.Forecast{},
 			Hourly:    []models.HourlyForecast{},
@@ -1042,12 +1043,12 @@ func TestTemplateDataComputeDataHash(t *testing.T) {
 		data1 := createTestData()
 		data2 := createTestData()
 
-		_, _, hash1, err := HTML(data1)
+		_, _, hash1, err := HTML(context.Background(), data1)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}
 
-		_, _, hash2, err := HTML(data2)
+		_, _, hash2, err := HTML(context.Background(), data2)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}
@@ -1062,12 +1063,12 @@ func TestTemplateDataComputeDataHash(t *testing.T) {
 		data2 := createTestData()
 		data2.Weather.Temperature = 75
 
-		_, _, hash1, err := HTML(data1)
+		_, _, hash1, err := HTML(context.Background(), data1)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}
 
-		_, _, hash2, err := HTML(data2)
+		_, _, hash2, err := HTML(context.Background(), data2)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}
@@ -1082,12 +1083,12 @@ func TestTemplateDataComputeDataHash(t *testing.T) {
 		data2 := createTestData()
 		data2.Events[baseTime][0].Name = "Different Event"
 
-		_, _, hash1, err := HTML(data1)
+		_, _, hash1, err := HTML(context.Background(), data1)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}
 
-		_, _, hash2, err := HTML(data2)
+		_, _, hash2, err := HTML(context.Background(), data2)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}
@@ -1099,7 +1100,7 @@ func TestTemplateDataComputeDataHash(t *testing.T) {
 
 	t.Run("hash is 64 hex characters (SHA-256)", func(t *testing.T) {
 		data := createTestData()
-		_, _, hash, err := HTML(data)
+		_, _, hash, err := HTML(context.Background(), data)
 		if err != nil {
 			t.Fatalf("HTML rendering failed: %v", err)
 		}

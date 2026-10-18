@@ -1,10 +1,27 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"go.opentelemetry.io/otel"
 )
+
+// TestCycleMetricsNoopInstrumentation exercises the metric instruments against
+// the noop global provider (telemetry disabled): recording must not error.
+func TestCycleMetricsNoopInstrumentation(t *testing.T) {
+	metrics, err := newCycleMetrics(otel.GetMeterProvider().
+		Meter("github.com/markis/hass-dashboard/cmd/hass-dashboard/test"))
+	if err != nil {
+		t.Fatalf("newCycleMetrics error: %v", err)
+	}
+
+	metrics.observeCycle(context.Background(), nil, 10*time.Millisecond)
+	metrics.observeStage(context.Background(), stageWeather, 10*time.Millisecond)
+}
 
 func TestLoadConfigDefaults(t *testing.T) {
 	// Create a minimal config file
@@ -140,6 +157,56 @@ refresh_interval: 300
 
 	if config.RefreshInterval != 300 {
 		t.Errorf("RefreshInterval = %d, want 300", config.RefreshInterval)
+	}
+}
+
+func TestLoadConfigOtel(t *testing.T) {
+	configContent := `
+otel:
+  enabled: true
+  endpoint: "http://otel-collector:4318"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	config, err := loadConfig(configPath)
+	if err != nil {
+		t.Fatalf("loadConfig error: %v", err)
+	}
+
+	if !config.Otel.Enabled {
+		t.Error("Otel.Enabled = false, want true")
+	}
+
+	if want := "http://otel-collector:4318"; config.Otel.Endpoint != want {
+		t.Errorf("Otel.Endpoint = %q, want %q", config.Otel.Endpoint, want)
+	}
+}
+
+func TestLoadConfigOtelDefaultsToDisabled(t *testing.T) {
+	// No otel section — telemetry must stay disabled.
+	configContent := `
+google:
+  credentials_file: "credentials.json"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	config, err := loadConfig(configPath)
+	if err != nil {
+		t.Fatalf("loadConfig error: %v", err)
+	}
+
+	if config.Otel.Enabled {
+		t.Error("Otel.Enabled = true, want false")
 	}
 }
 
