@@ -388,7 +388,7 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.Action[c
 			// Check if we've exceeded timeout
 			if time.Since(start) > timeout {
 				slog.Warn("Font loading timeout exceeded, proceeding anyway",
-					slog.Duration("timeout", timeout),
+					slog.String("timeout", timeout.String()),
 					slog.Int("max_attempts", maxRetries))
 				checkAndLogNetworkErrors(ctx)
 
@@ -414,7 +414,7 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.Action[c
 			} else if fontsReady {
 				slog.Info("Fonts loaded",
 					slog.Int("attempts", attempt+1),
-					slog.Duration("elapsed", time.Since(start)))
+					slog.String("elapsed", time.Since(start).String()))
 
 				return nil
 			}
@@ -425,7 +425,7 @@ func waitForFontsToLoad(timeout time.Duration, maxRetries int) chromedp.Action[c
 
 			if attempt < maxRetries-1 {
 				slog.Info("Waiting for fonts to load",
-					slog.Duration("retry_in", delay),
+					slog.String("retry_in", delay.String()),
 					slog.Int("attempt", attempt+1),
 					slog.Int("max_attempts", maxRetries))
 				time.Sleep(delay)
