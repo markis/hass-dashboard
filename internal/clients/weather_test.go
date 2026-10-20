@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/markis/hass-dashboard/internal/models"
+	"github.com/markis/home-dashboard/internal/models"
 )
 
 func TestWeatherClientGetWeather(t *testing.T) {

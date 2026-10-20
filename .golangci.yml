@@ -11,7 +11,7 @@ formatters:
         group-params: true
     goimports:
       local-prefixes:
-        - github.com/markis/hass-dashboard
+        - github.com/markis/home-dashboard
 
 run:
   timeout: 5m

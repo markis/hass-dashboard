@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# Health check script for hass-dashboard
+# Health check script for home-dashboard
 # Checks if the output file exists and has been updated within the expected interval
 
 # Default config path

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Essential context for AI coding agents working on hass-dashboard.
+Essential context for AI coding agents working on home-dashboard.
 
 ## Overview
 
@@ -8,20 +8,20 @@ Go dashboard-image generator for e-ink displays: fetches Google Calendar events
 (service account with Workspace domain-wide delegation) plus OpenWeatherMap
 weather (One Call API), renders an HTML template, and screenshots it with
 chromedp (PNG → JPEG) to the configured output path at a fixed interval. Single
-binary, entry point `cmd/hass-dashboard/main.go`.
+binary, entry point `cmd/home-dashboard/main.go`.
 
-Module `github.com/markis/hass-dashboard`, Go from `go.mod` (CI reads the
+Module `github.com/markis/home-dashboard`, Go from `go.mod` (CI reads the
 version from go.mod).
 
 ## Commands
 
 ```bash
-go build -o hass-dashboard ./cmd/hass-dashboard
+go build -o home-dashboard ./cmd/home-dashboard
 go test ./...                          # hermetic: no Chrome, network, or credentials needed
 go test ./internal/clients -run TestWeatherClientGetWeather
 golangci-lint run                      # lint AND format checks (see .golangci.yml formatters)
 golangci-lint fmt                      # auto-apply gofumpt + goimports with module local-prefix
-./hass-dashboard --config config.yaml  # run (only after go build)
+./home-dashboard --config config.yaml  # run (only after go build)
 ```
 
 - Format with `golangci-lint fmt`, **not** plain `gofumpt -w`: the gofumpt

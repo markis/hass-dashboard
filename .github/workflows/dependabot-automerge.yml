@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.actor == 'dependabot[bot]' &&
-      github.repository == 'markis/hass-dashboard'
+      github.repository == 'markis/home-dashboard'
     steps:
       - id: gate
         name: Decide whether the PR may auto-merge

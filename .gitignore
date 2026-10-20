@@ -9,7 +9,7 @@ ignore*
 *.png
 /config.yaml
 /credentials.json
-/hass-dashboard
+/home-dashboard
 
 static/fonts/*.woff*
 static/fonts/*.css

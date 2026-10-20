@@ -15,12 +15,12 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* && 
     ./scripts/fonts-to-css.sh
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /hass-dashboard ./cmd/hass-dashboard
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /home-dashboard ./cmd/home-dashboard
 
 
 FROM alpine:3.24 AS runtime
 
-LABEL org.opencontainers.image.source="https://github.com/markis/hass-dashboard" \
+LABEL org.opencontainers.image.source="https://github.com/markis/home-dashboard" \
     org.opencontainers.image.description="Home Assistant Dashboard - generates dashboard images from calendar and weather data" \
     org.opencontainers.image.licenses="MIT"
 
@@ -46,8 +46,8 @@ ENV CHROME_NO_FIRST_RUN=1
 WORKDIR /app
 
 COPY scripts/healthcheck.sh /app/scripts/healthcheck.sh
-COPY --from=builder /hass-dashboard /app/hass-dashboard
+COPY --from=builder /home-dashboard /app/home-dashboard
 COPY --from=builder /src/static/fonts/weather-icons-embedded.css /app/static/fonts/weather-icons-embedded.css
 
 USER 65534:65534
-ENTRYPOINT ["/app/hass-dashboard", "--config", "/app/config.yaml"]
+ENTRYPOINT ["/app/home-dashboard", "--config", "/app/config.yaml"]

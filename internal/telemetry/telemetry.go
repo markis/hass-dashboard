@@ -58,7 +58,7 @@ const (
 	metricsPath = "/v1/metrics"
 
 	// serviceName is the resource attribute identifying this service.
-	serviceName = "hass-dashboard"
+	serviceName = "home-dashboard"
 )
 
 // Config controls OpenTelemetry export.

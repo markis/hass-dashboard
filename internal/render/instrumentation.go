@@ -8,7 +8,7 @@ import (
 )
 
 // renderMeterName is the instrumentation scope name for this package.
-const renderMeterName = "github.com/markis/hass-dashboard/internal/render"
+const renderMeterName = "github.com/markis/home-dashboard/internal/render"
 
 // tracer returns this package's instrumentation scope tracer, resolved from
 // the global provider (noop until telemetry.Init enables the SDK).

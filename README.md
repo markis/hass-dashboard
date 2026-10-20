@@ -1,4 +1,4 @@
-# hass-dashboard
+# home-dashboard
 
 A dashboard image generator that displays calendar events and weather forecasts. Designed for e-ink displays and other low-refresh-rate screens.
 
@@ -22,13 +22,13 @@ A dashboard image generator that displays calendar events and weather forecasts.
 ### Docker (Recommended)
 
 ```bash
-docker pull ghcr.io/markis/hass-dashboard:latest
+docker pull ghcr.io/markis/home-dashboard:latest
 ```
 
 Create a `config.yaml` file (see [Configuration](#configuration)) and run:
 
 ```bash
-docker run -v ./config.yaml:/app/config.yaml:ro -v ./output:/output -v ./credentials.json:/app/credentials.json:ro ghcr.io/markis/hass-dashboard:latest
+docker run -v ./config.yaml:/app/config.yaml:ro -v ./output:/output -v ./credentials.json:/app/credentials.json:ro ghcr.io/markis/home-dashboard:latest
 ```
 
 Or use Docker Compose:
@@ -36,8 +36,8 @@ Or use Docker Compose:
 ```yaml
 services:
   dashboard:
-    image: ghcr.io/markis/hass-dashboard:latest
-    container_name: hass-dashboard
+    image: ghcr.io/markis/home-dashboard:latest
+    container_name: home-dashboard
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./output:/output
@@ -53,8 +53,8 @@ services:
 ### From Source
 
 ```bash
-go build -o hass-dashboard ./cmd/hass-dashboard
-./hass-dashboard --config config.yaml
+go build -o home-dashboard ./cmd/home-dashboard
+./home-dashboard --config config.yaml
 ```
 
 ### Kubernetes
@@ -71,7 +71,7 @@ kubectl create secret generic google-calendar-creds \
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: hass-dashboard-config
+  name: home-dashboard-config
 data:
   config.yaml: |
     google:
@@ -97,20 +97,20 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hass-dashboard
+  name: home-dashboard
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: hass-dashboard
+      app: home-dashboard
   template:
     metadata:
       labels:
-        app: hass-dashboard
+        app: home-dashboard
     spec:
       containers:
-        - name: hass-dashboard
-          image: ghcr.io/markis/hass-dashboard:latest
+        - name: home-dashboard
+          image: ghcr.io/markis/home-dashboard:latest
           args: ["--config", "/app/config.yaml"]
           volumeMounts:
             - name: config
@@ -125,7 +125,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: hass-dashboard-config
+            name: home-dashboard-config
         - name: credentials
           secret:
             secretName: google-calendar-creds
@@ -228,7 +228,7 @@ serve:
 ## Usage
 
 ```bash
-./hass-dashboard --config config.yaml
+./home-dashboard --config config.yaml
 ```
 
 The application will generate a dashboard image immediately and then regenerate it at the configured interval. The generated image can be served to e-ink displays or other devices.
@@ -282,7 +282,7 @@ The health check is automatically configured in the Docker Compose file. View st
 docker ps
 
 # View health check logs
-docker inspect hass-dashboard | jq '.[0].State.Health'
+docker inspect home-dashboard | jq '.[0].State.Health'
 ```
 
 Health check parameters:

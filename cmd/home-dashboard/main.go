@@ -18,11 +18,11 @@ import (
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"gopkg.in/yaml.v3"
 
-	"github.com/markis/hass-dashboard/internal/clients"
-	"github.com/markis/hass-dashboard/internal/models"
-	"github.com/markis/hass-dashboard/internal/render"
-	"github.com/markis/hass-dashboard/internal/serve"
-	"github.com/markis/hass-dashboard/internal/telemetry"
+	"github.com/markis/home-dashboard/internal/clients"
+	"github.com/markis/home-dashboard/internal/models"
+	"github.com/markis/home-dashboard/internal/render"
+	"github.com/markis/home-dashboard/internal/serve"
+	"github.com/markis/home-dashboard/internal/telemetry"
 )
 
 // Default configuration values applied when the config file omits them.
@@ -49,7 +49,7 @@ const (
 
 // instrumentationScope is the scope name shared by the main package's tracer
 // and meter.
-const instrumentationScope = "github.com/markis/hass-dashboard/cmd/hass-dashboard"
+const instrumentationScope = "github.com/markis/home-dashboard/cmd/home-dashboard"
 
 // Config holds application configuration loaded from YAML file.
 type Config struct {

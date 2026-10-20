@@ -14,7 +14,7 @@ import (
 // the noop global provider (telemetry disabled): recording must not error.
 func TestCycleMetricsNoopInstrumentation(t *testing.T) {
 	metrics, err := newCycleMetrics(otel.GetMeterProvider().
-		Meter("github.com/markis/hass-dashboard/cmd/hass-dashboard/test"))
+		Meter("github.com/markis/home-dashboard/cmd/home-dashboard/test"))
 	if err != nil {
 		t.Fatalf("newCycleMetrics error: %v", err)
 	}

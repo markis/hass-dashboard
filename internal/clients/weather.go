@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	"github.com/markis/hass-dashboard/internal/models"
+	"github.com/markis/home-dashboard/internal/models"
 )
 
 // WeatherClient fetches weather data from OpenWeatherMap.

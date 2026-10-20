@@ -8,5 +8,5 @@ import (
 // tracer returns this package's instrumentation scope tracer, resolved from
 // the global provider (noop until telemetry.Init enables the SDK).
 func tracer() trace.Tracer {
-	return otel.Tracer("github.com/markis/hass-dashboard/internal/clients")
+	return otel.Tracer("github.com/markis/home-dashboard/internal/clients")
 }

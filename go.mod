@@ -1,4 +1,4 @@
-module github.com/markis/hass-dashboard
+module github.com/markis/home-dashboard
 
 go 1.26.0
 

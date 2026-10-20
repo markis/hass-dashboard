@@ -49,11 +49,11 @@ func TestInitEnabledExportsTracesAndMetrics(t *testing.T) {
 		t.Fatal("expected non-nil shutdown function when telemetry is enabled")
 	}
 
-	_, span := otel.Tracer("github.com/markis/hass-dashboard/internal/telemetry/test").Start(
+	_, span := otel.Tracer("github.com/markis/home-dashboard/internal/telemetry/test").Start(
 		context.Background(), "test.span")
 	span.End()
 
-	counter, err := otel.Meter("github.com/markis/hass-dashboard/internal/telemetry/test").
+	counter, err := otel.Meter("github.com/markis/home-dashboard/internal/telemetry/test").
 		Int64Counter("dashboard.test.count")
 	if err != nil {
 		t.Fatalf("creating counter: %v", err)
@@ -112,11 +112,11 @@ func TestInitGRPCExportsTracesAndMetrics(t *testing.T) {
 		t.Fatalf("Init error: %v", err)
 	}
 
-	_, span := otel.Tracer("github.com/markis/hass-dashboard/internal/telemetry/test").Start(
+	_, span := otel.Tracer("github.com/markis/home-dashboard/internal/telemetry/test").Start(
 		context.Background(), "test.span")
 	span.End()
 
-	counter, err := otel.Meter("github.com/markis/hass-dashboard/internal/telemetry/test").
+	counter, err := otel.Meter("github.com/markis/home-dashboard/internal/telemetry/test").
 		Int64Counter("dashboard.test.count")
 	if err != nil {
 		t.Fatalf("creating counter: %v", err)

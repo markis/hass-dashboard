@@ -1,7 +1,7 @@
 services:
   dashboard:
-    image: ghcr.io/markis/hass-dashboard:latest
-    container_name: hass-dashboard
+    image: ghcr.io/markis/home-dashboard:latest
+    container_name: home-dashboard
     build:
       context: .
       dockerfile: Containerfile

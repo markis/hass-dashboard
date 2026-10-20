@@ -17,7 +17,7 @@ import (
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
 
-	"github.com/markis/hass-dashboard/internal/models"
+	"github.com/markis/home-dashboard/internal/models"
 )
 
 // CalendarClient fetches calendar events from the Google Calendar API using a
