@@ -1,267 +1,112 @@
 # AGENTS.md
 
-This document contains essential information for AI coding agents working in the hass-dashboard repository.
+Essential context for AI coding agents working on hass-dashboard.
 
-## Project Overview
+## Overview
 
-A Go-based dashboard image generator that displays calendar events and weather forecasts. Uses chromedp for rendering HTML to PNG images suitable for e-ink displays. Calendar events are read directly from the Google Calendar API using a service account with Workspace domain-wide delegation; weather comes from OpenWeatherMap.
+Go dashboard-image generator for e-ink displays: fetches Google Calendar events
+(service account with Workspace domain-wide delegation) plus OpenWeatherMap
+weather (One Call API), renders an HTML template, and screenshots it with
+chromedp (PNG → JPEG) to the configured output path at a fixed interval. Single
+binary, entry point `cmd/hass-dashboard/main.go`.
 
-**Module**: `github.com/markis/hass-dashboard`
-**Go Version**: 1.25.0
+Module `github.com/markis/hass-dashboard`, Go from `go.mod` (CI reads the
+version from go.mod).
 
-## Build, Lint, and Test Commands
+## Commands
 
-### Build
 ```bash
-# Build the main binary
 go build -o hass-dashboard ./cmd/hass-dashboard
-
-# Build with verbose output
-go build -v -o hass-dashboard ./cmd/hass-dashboard
-
-# Install to $GOPATH/bin
-go install ./cmd/hass-dashboard
+go test ./...                          # hermetic: no Chrome, network, or credentials needed
+go test ./internal/clients -run TestWeatherClientGetWeather
+golangci-lint run                      # lint AND format checks (see .golangci.yml formatters)
+golangci-lint fmt                      # auto-apply gofumpt + goimports with module local-prefix
+./hass-dashboard --config config.yaml  # run (only after go build)
 ```
 
-### Test
-```bash
-# Run all tests
-go test ./...
+- Format with `golangci-lint fmt`, **not** plain `gofumpt -w`: the gofumpt
+  `extra` rules (`clothe-returns`, `group-params`) and the goimports
+  `local-prefixes` live in `.golangci.yml`, and `golangci-lint run` fails on
+  formatting violations.
+- CI runs `golangci-lint` pinned to v2.15.0 (lint.yml) so fix locally with the
+  same version.
+- CI tests with `go test -race` and `CGO_ENABLED=1` (race detector requirement;
+  needs a C toolchain). Plain `go test ./...` is fine for fast local iteration.
+- `.golangci.yml` uses an explicit linter enable list (not `default: all`) so
+  renamed/removed linters can't silently start failing CI — add new linters
+  there on purpose. Hard limits (funlen 100 lines/50 statements, lll 120,
+  gocognit 20, gocyclo 15, varnamelen) are configured in that file; most are
+  exempted for `*_test.go`.
+- depguard denies `io/ioutil` and `github.com/pkg/errors` — use `os`/`io` and
+  stdlib `errors`; wrap errors with `fmt.Errorf("...: %w", err)`.
 
-# Run tests with verbose output
-go test -v ./...
+## Project conventions (differ from Go defaults)
 
-# Run tests with coverage
-go test -cover ./...
-go test -coverprofile=coverage.out ./...
+- Logging is `log/slog` with a JSON handler installed as the *default* logger in
+  `main` — just call `slog.Info/Error/...` anywhere. Messages are plain
+  human-readable phrases; values go in key/value attributes with snake_case keys
+  (`"calendar_id"`, `"error"`), never fmt.Sprintf-ed into the message. The JSON
+  handler serializes `time.Duration` as raw nanoseconds — log durations as
+  `.String()` strings when humans will read them.
+- Fatal startup failures go through the `fail` helper in `main.go` (log + exit 1
+  + optional cleanup), not `panic` or bare `os.Exit`.
+- Config is YAML (`gopkg.in/yaml.v3`) with tags matching keys exactly
+  (`yaml:"credentials_file"`). `config.yaml` and `credentials.json` are
+  gitignored — copy `config.example.yaml` for local runs.
+- Tests are table-driven with `t.Run` subtests and hit `httptest.NewServer()`
+  against client endpoints; no test spawns Chrome or the network.
 
-# Run a single test file
-go test ./internal/clients/weather_test.go
+## Gotchas
 
-# Run a single test function
-go test -run TestWeatherClientGetWeather ./internal/clients
+- Template assets are compiled in via `go:embed` from
+  `internal/render/templates/` (`dashboard.html`, `style.css`,
+  `weather-icons-embedded.css`). Editing them requires a rebuild — nothing is
+  read from disk at runtime.
+- Weather Icons fonts are codegen'd and gitignored (`static/fonts/*.woff*`,
+  `*.css`): the Docker build runs `scripts/download-weather-icons.sh` +
+  `scripts/fonts-to-css.sh`, which write to `static/fonts/`. The binary embeds
+  the committed `internal/render/templates/weather-icons-embedded.css`, so
+  changing rendered icons means copying fresh CSS into that template file;
+  `static/fonts/weather-icons-embedded.css` copied into the runtime image is
+  vestigial.
+- Actually rendering an image needs a real Chrome/Chromium binary for chromedp
+  (containers set `CHROME_PATH=/usr/bin/chromium-browser`); pure-Go tests don't.
+- Renders are skipped when the input-data SHA-256 matches the stored
+  `output.path + ".hash"` — on unchanged data the image file is intentionally
+  left untouched (the serve endpoint then answers 304; the hash file is touched
+  instead so the healthcheck still sees freshness).
 
-# Run tests in a specific package
-go test ./internal/clients
-go test ./cmd/hass-dashboard
-
-# Run tests with race detector
-go test -race ./...
-
-# Run tests with timeout
-go test -timeout 30s ./...
-```
-
-### Lint
-```bash
-# Run golangci-lint (primary linter)
-golangci-lint run
-
-# Run with auto-fix where possible
-golangci-lint run --fix
-
-# Lint specific directory
-golangci-lint run ./internal/...
-
-# Lint with verbose output
-golangci-lint run -v
-```
-
-### Format
-```bash
-# Format code with gofumpt (stricter than gofmt)
-gofumpt -l -w .
-
-# Organize imports with goimports
-goimports -w -local github.com/markis/hass-dashboard .
-
-# Standard go fmt
-go fmt ./...
-```
-
-### Other Commands
-```bash
-# Run the application
-./hass-dashboard --config config.yaml
-
-# Tidy dependencies
-go mod tidy
-
-# Verify dependencies
-go mod verify
-
-# Download dependencies
-go mod download
-```
-
-## Code Style Guidelines
-
-### Formatting
-- **Line Length**: 120 characters maximum
-- **Indentation**: 2 spaces (tabs in Go files handled by gofmt)
-- **Final Newline**: Always include
-- **Trailing Whitespace**: Remove all
-- **Line Endings**: LF (Unix-style)
-
-### Imports
-- Group imports in three sections: stdlib, external, local
-- Local imports use prefix: `github.com/markis/hass-dashboard`
-- Use `goimports` with `-local` flag to organize correctly
-- No blank imports except for side-effects (document why with comment)
-- Example:
-  ```go
-  import (
-      "context"
-      "fmt"
-      
-      "gopkg.in/yaml.v3"
-      
-      "github.com/markis/hass-dashboard/internal/clients"
-  )
-  ```
-
-### Naming Conventions
-- **Packages**: lowercase, single word when possible (e.g., `clients`, `models`, `render`)
-- **Types**: PascalCase (e.g., `WeatherClient`, `Config`)
-- **Functions/Methods**: camelCase for private, PascalCase for exported
-- **Variables**: camelCase, meaningful names
-- **Constants**: PascalCase or ALL_CAPS for exported
-- **Minimum Variable Name Length**: 2 characters (exceptions: `i`, `j` for loops, `ok` for map checks)
-- **Allowed Single Letters**: `i`, `j`, `id`, `tx`, `db`, `wg`, `ctx`, `err`, `ok`
-
-### Types and Interfaces
-- Always use explicit types for struct fields
-- Use `context.Context` as first parameter in functions that need it
-- Prefer concrete types over interfaces unless abstraction is needed
-- Document all exported types, functions, and methods
-- Use pointer receivers for methods that modify state
-- Use value receivers for methods that don't modify state
-
-### Error Handling
-- **Always check errors** - blank error checks are not allowed
-- **Wrap errors with context** using `fmt.Errorf` with `%w` verb:
-  ```go
-  return nil, fmt.Errorf("fetching calendar %s: %w", calID, err)
-  ```
-- **Do NOT use** `github.com/pkg/errors` - use stdlib `errors` package
-- **Do NOT use** `io/ioutil` - use `io` and `os` packages
-- Return early on error - avoid deep nesting
-- Check type assertions: `value, ok := x.(Type)`
-- Close resources properly - especially `io.Closer` types
-
-### Functions
-- **Maximum Lines**: 100 lines
-- **Maximum Statements**: 50 statements
-- **Cyclomatic Complexity**: Keep below 15
-- **Cognitive Complexity**: Keep below 20
-- Context as first parameter: `func DoSomething(ctx context.Context, ...)`
-- Error as last return value: `func DoSomething(...) (result Type, err error)`
-
-### Comments
-- Document all exported types, functions, constants, and variables
-- Start comments with the name of the thing being documented
-- Use complete sentences with proper punctuation
-- Example:
-  ```go
-  // WeatherClient fetches weather data from OpenWeatherMap.
-  type WeatherClient struct { ... }
-  
-  // GetWeather retrieves current weather and forecast data.
-  func (c *WeatherClient) GetWeather(ctx context.Context, ...) { ... }
-  ```
-
-### Testing
-- Test files named `*_test.go`
-- Use table-driven tests when testing multiple scenarios
-- Use `t.Run()` for subtests with descriptive names
-- Use `httptest.NewServer()` for testing HTTP clients
-- Mock external dependencies
-- Test error conditions, not just happy paths
-- Example test names: `TestWeatherClientGetWeather`, `TestCalendarClientGetCalendars`, `TestGroupEventsByDate`
-
-### Concurrency
-- Use `sync.RWMutex` for shared state that's read often, written rarely
-- Use `sync.Mutex` for simple exclusive access
-- Always defer `Unlock()` immediately after `Lock()`
-- Use channels for communication, mutexes for state
-- Context for cancellation and timeouts
-
-### Struct Tags
-- YAML tags must match the external API/config format exactly
-- Use lowercase with underscores for YAML: `yaml:"credentials_file"`
-- JSON tags should be lowercase/camelCase as appropriate: `json:"calendarId"`
-
-### Best Practices
-- Use `time.Duration` constants: `30 * time.Second`, not magic numbers
-- HTTP client timeouts are required (30s is standard for this project)
-- Log errors before returning when appropriate
-- Use `log/slog` for logging (JSON handler installed as the default logger in `main`):
-  messages are plain, human-readable phrases; values go in key/value attributes with
-  snake_case keys (`"calendar_id"`, `"error"`), never `fmt.Sprintf`-ed into the message.
-  Note the JSON handler serializes `time.Duration` values as raw nanoseconds — log
-  durations as `.String()` strings when humans will read them.
-  Fatal startup failures use the `fail` helper in `cmd/hass-dashboard/main.go`.
-- Use meaningful variable names over comments
-- Prefer small, focused functions over large ones
-- Group related functionality in the same file
-- Keep package-level docs in a separate `doc.go` file if extensive
-
-## Project Structure
+## Architecture
 
 ```
-hass-dashboard/
-├── cmd/
-│   └── hass-dashboard/     # Main application entry point
-├── internal/
-│   ├── clients/            # HTTP clients (Calendar, Weather)
-│   ├── models/             # Data models
-│   └── render/             # HTML rendering and image generation
-├── static/                 # Static assets (CSS, fonts, icons)
-├── scripts/                # Shell scripts (healthcheck, utilities)
-├── docs/                   # Documentation
-├── config.yaml             # Runtime configuration
-└── .golangci.yml           # Linter configuration
+main.go generation loop (per refresh_interval):
+  fetch (weather + calendar concurrently) → buildTemplate → render.Image
 ```
 
-## Configuration Files
+- `internal/clients` — Google Calendar: service-account JWT self-signs tokens
+  (`google.JWTConfigFromJSON`, `calendar.CalendarReadonlyScope`, Workspace user
+  impersonation via `jwtConfig.Subject`; no `token.json`). Paginated
+  `Events.List(...).SingleEvents(true)` calls; pure `groupEventsByDate` helper
+  groups by date. Weather: OpenWeatherMap One Call API, 30s HTTP timeout,
+  `sync.RWMutex` cache keyed by lat/long with 10-minute TTL and stale-cache
+  fallback after fetch errors.
+- `internal/render` — html/template assembly (pure, fully unit-testable) plus
+  the only chunk requiring Chrome: chromedp FullScreenshot → JPEG, written
+  atomically via temp file + rename.
+- `internal/serve` — read-only HTTP image server; requests never trigger a
+  render (404 until the first image exists on disk).
+- `internal/telemetry` — OTLP traces/metrics, off by default (`otel.enabled`).
+  `telemetry.Init` must run before building instrumented components.
+- `internal/models` — shared data types.
+- `docs/plans/` — existing design documents for past significant changes.
 
-- `.golangci.yml`: Complete golangci-lint configuration with all rules
-- `.editorconfig`: Editor formatting settings
-- `go.mod`: Go module dependencies
-- `config.yaml`: Application runtime configuration (not committed)
-- `config.example.yaml`: Example configuration template
+## CI / release flow
 
-## Disabled Linters
-
-The linter configuration uses an explicit enable list (not `default: all`), so
-that renamed linters (e.g. `exhaustruct` -> `exhaustruct_v5`) do not silently
-start running. The following linters are deliberately not enabled (see
-`.golangci.yml` for reasons):
-- `wrapcheck`, `exhaustruct`/`exhaustruct_v5`, `ireturn`, `err113`, `mnd`
-- `noinlineerr`, `tagliatelle`, `noctx`, `perfsprint`
-
-Note: the deprecated `wsl` and `gomodguard` names are also not enabled, but
-their replacements `wsl_v5` and `gomodguard_v2` are enabled.
-
-## Test Files Exemptions
-
-Test files (`*_test.go`) are exempted from these linters:
-- `cyclop`, `funlen`, `gocognit`, `goconst`, `dupl`
-- `varnamelen`, `nestif`, `errcheck`, `paralleltest`
-- `testpackage`, `govet`, `wsl_v5`, `nlreturn`
-
-## Common Patterns in This Codebase
-
-- HTTP clients use 30-second timeouts (see `WeatherClient`)
-- Google Calendar client authenticates with a service account JWT config
-  (`google.JWTConfigFromJSON` + `calendar.CalendarReadonlyScope`) and impersonates
-  a Workspace user via `jwtConfig.Subject`; no `token.json` is needed because the
-  service account self-signs JWTs and exchanges them for short-lived access tokens
-  at runtime (see `internal/clients/calendar.go`)
-- Calendar events are fetched with paginated `Events.List(...).SingleEvents(true)`
-  calls and grouped by date via the pure `groupEventsByDate` helper
-- Caching with `sync.RWMutex` and TTL expiry (see `WeatherClient`)
-- Stale cache fallback on API errors for resilience
-- Context-aware operations with proper propagation
-- YAML configuration with `gopkg.in/yaml.v3`
-- Error wrapping with `fmt.Errorf` and `%w`
+- Pushes to `main` auto-release a Docker image to ghcr.io
+  (`.github/workflows/docker.yml`): the patch version is auto-bumped from the
+  newest `v*` tag and the tag is pushed automatically. Don't hand-create patch
+  tags for main merges; manual `v*` tags are respected as-is.
+- Tests: push/PR to `main` runs the race-enabled suite plus a per-function
+  coverage summary; lint pins the golangci-lint version.
+- Dependabot: Go minor+patch bumps are grouped into one PR with the
+  `chore(deps)` prefix; major bumps get separate PRs.
