@@ -47,7 +47,7 @@ func HTML(ctx context.Context, data *TemplateData) (string, string, string, erro
 	defer span.End()
 
 	eventCount := 0
-	maxEvents := 10 // Maximum number of events to display to prevent overflow
+	maxEvents := 12 // Maximum number of events to display to prevent overflow
 
 	funcMap := template.FuncMap{
 		"formatHour": func(t time.Time) string {
