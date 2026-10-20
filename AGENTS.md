@@ -98,7 +98,6 @@ main.go generation loop (per refresh_interval):
 - `internal/telemetry` — OTLP traces/metrics, off by default (`otel.enabled`).
   `telemetry.Init` must run before building instrumented components.
 - `internal/models` — shared data types.
-- `docs/plans/` — existing design documents for past significant changes.
 
 ## CI / release flow
 
