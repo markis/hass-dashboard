@@ -84,9 +84,9 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 		return pathErr
 	}
 
-	// Check if data has changed before rendering
+	// Check if data has changed before rendering.
 	if config.DataHash != "" {
-		unchanged, hashErr := checkDataUnchanged(config.OutputPath, config.DataHash)
+		unchanged, hashErr := checkDataUnchanged(config.OutputPath, renderKey(config))
 		switch {
 		case hashErr != nil:
 			logHashError(config.OutputPath, hashErr)
@@ -113,7 +113,7 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 
 	// Store data hash if provided
 	if config.DataHash != "" {
-		if err := saveDataHash(config.OutputPath, config.DataHash); err != nil {
+		if err := saveDataHash(config.OutputPath, renderKey(config)); err != nil {
 			slog.Warn("Failed to write hash file", "output_path", config.OutputPath, "error", err)
 		}
 	}
@@ -121,6 +121,14 @@ func Image(ctx context.Context, html, css string, config *ImageConfig) error {
 	recordRenderUpdate(ctx, span, counter, renderResultWritten)
 
 	return nil
+}
+
+// renderKey returns the change-detection key for a render: the input-data
+// SHA-256 prefixed with the image geometry (size and rotation), so a changed
+// output size or rotation triggers a re-render instead of serving an image
+// written with the previous dimensions.
+func renderKey(config *ImageConfig) string {
+	return fmt.Sprintf("%dx%d@r%d:%s", config.Width, config.Height, config.Rotate, config.DataHash)
 }
 
 // recordRenderUpdate marks the render span's changed flag and counts the
@@ -269,6 +277,11 @@ func renderHTMLToImage(ctx context.Context, fullHTML string, config *ImageConfig
 
 	if err := chromedp.Do(taskCtx,
 		chromedp.Navigate("about:blank"),
+		// --window-size sizes the headless *window*, but modern Chromium (new
+		// headless mode) reserves part of it for window UI, so the actual web
+		// viewport comes out smaller (e.g. 1280 becomes 1137 on a 820x1280
+		// window). Pin the viewport to the exact output size instead.
+		chromedp.EmulateViewport(int64(config.Width), int64(config.Height)),
 		chromedp.Evaluate[chromedp.Void](`document.write(`+jsonString(fullHTML)+`); document.close();`),
 		waitForFontsToLoad(fontTimeout, maxRetries),
 	); err != nil {

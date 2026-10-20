@@ -218,3 +218,30 @@ func TestImageConfigDataHash(t *testing.T) {
 		}
 	})
 }
+
+func TestRenderKey(t *testing.T) {
+	config := &ImageConfig{
+		Width: 820, Height: 1280, Rotate: 270, DataHash: "abc123",
+	}
+
+	tests := []struct {
+		name string
+		key  string
+		same bool // whether this key should match the config's renderKey
+	}{
+		{name: "identical geometry and hash", key: "820x1280@r270:abc123", same: true},
+		{name: "height change invalidates", key: "820x1137@r270:abc123", same: false},
+		{name: "width change invalidates", key: "1280x1280@r270:abc123", same: false},
+		{name: "rotation change invalidates", key: "820x1280@r0:abc123", same: false},
+		{name: "content change invalidates", key: "820x1280@r270:def456", same: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderKey(config)
+			if (got == tt.key) != tt.same {
+				t.Errorf("renderKey() = %q, comparing with %q (same=%v)", got, tt.key, tt.same)
+			}
+		})
+	}
+}
