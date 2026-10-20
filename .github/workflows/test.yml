@@ -1,0 +1,75 @@
+---
+name: "test"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          # Read the Go version from go.mod so CI always tests with the project's Go.
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        env:
+          # Required by the race detector.
+          CGO_ENABLED: "1"
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [[ ! -f coverage.out ]]; then
+            echo "No coverage profile written, skipping summary"
+            exit 0
+          fi
+          {
+            echo "### Coverage report"
+            echo
+            mod="$(go list -m)"
+            go tool cover -func=coverage.out | awk -F'\t' -v mod="$mod" '
+              BEGIN {
+                print "| File | Function | Coverage |"
+                print "|------|----------|----------|"
+              }
+              { sub("^" mod "/", "", $1) }
+              /^total:/ {
+                for (i = NF; i > 0; i--) if ($i != "") { total = $i; break }
+                next
+              }
+              {
+                n = 0
+                for (i = 1; i <= NF; i++) if ($i != "") f[++n] = $i
+                split(f[1], loc, ":")
+                printf "| `%s:%s` | %s | %s |\n", loc[1], loc[2], f[2], f[3]
+              }
+              END {
+                if (total != "") {
+                  print ""
+                  printf "**Total:** %s\n", total
+                }
+              }'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: ignore
